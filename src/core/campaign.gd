@@ -119,14 +119,18 @@ func close_day() -> Dictionary:
 	sim.brand_score = clampf(sim.brand_score + brand_delta, 0.0, 1.0)
 	sim.category_reputation = clampf(sim.category_reputation + rep_delta, 0.0, 1.0)
 
-	# 5. FINANCE — costs coupled to ACTUAL runtime
+	# 5. FINANCE — per-HOUR costs coupled to ACTUAL runtime (M1 pass 2)
+	# opex and wages are per-day rates in the CSV; charge per active hour
+	# (run_ticks = minutes actually running). Idle machines cost nothing.
 	var opex: float = 0.0
 	var energy: float = 0.0
+	var operator_hours: float = 0.0
 	for m in sim.line.machines:
-		opex += m.data.opex_per_day
-		energy += sim.economy.energy_cost(m.data.power_kw, m.run_ticks_today / 60.0)
-	var staff: int = sim.line.machines.size()
-	var wage_cost: float = sim.economy.wage_cost(staff, wage_policy)
+		var hours: float = m.run_ticks_today / 60.0
+		opex += sim.economy.opex_cost_hours(m.data.opex_per_day, hours)
+		energy += sim.economy.energy_cost(m.data.power_kw, hours)
+		operator_hours += hours  # one operator per machine, charged per active hour
+	var wage_cost: float = sim.economy.wage_cost_hours(operator_hours, wage_policy)
 	var input_cost: float = sim.line.raw_consumed_today * recipe.base_unit_cost
 	var cost: float = wage_cost + opex + energy + input_cost
 	var revenue: float = shop_revenue

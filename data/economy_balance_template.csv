@@ -3,10 +3,10 @@ ECO_START_CASH,startup,60000,45000,20000,100000,currency,all,money_on_day_1,Lowe
 ECO_DEBT_LIMIT,finance,120000,98000,50000,250000,currency,all,bankruptcy_check,Used with missed obligations
 ECO_BASE_LOAN_RATE,finance,0.045,0.06,0.01,0.12,rate,all,daily_interest_calc,Floating rate events can modify
 ECO_WAGE_BASE,labor,140,165,80,260,currency_per_worker_per_day,all,wage_cost_calc,Higher hard-mode pressure
-ECO_WAGE_QUALITY_MULT,labor,0.12,0.1,0.02,0.2,coefficient,quality,W_component_scale,Scales wage effect on quality
+ECO_WAGE_QUALITY_MULT,labor,0.12,0.11,0.02,0.2,coefficient,quality,W_component_scale,Scales wage effect on quality
 ECO_ENERGY_PRICE,utilities,0.22,0.28,0.08,0.6,currency_per_kwh,all,power_cost_calc,Daily market fluctuations optional
 ECO_STORAGE_SPOIL_RATE,logistics,0.004,0.007,0,0.03,rate_per_day,perishables,freshness_decay,Impacts shelf-life products
-ECO_TRUCK_SLOT_COUNT,logistics,6,5,2,12,slots_per_day,contracts,dispatch_capacity,Core bottleneck lever
+ECO_TRUCK_SLOT_COUNT,logistics,6,6,2,12,slots_per_day,contracts,dispatch_capacity,Core bottleneck lever
 ECO_CONTRACT_PENALTY_RATE,contracts,0.18,0.22,0.05,0.6,rate,contracts,penalty_amount,Applied on misses
 ECO_CONTRACT_REPUTATION_HIT,contracts,6,9,1,20,points,contracts,reputation_loss,Per failed obligation
 ECO_SHOP_FOOTFALL_BASE,shop,1.0,0.9,0.5,1.5,multiplier,shop,demand_formula_e,Daily event multiplier base

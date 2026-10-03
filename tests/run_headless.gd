@@ -307,7 +307,7 @@ func _test_scenario(db: BalanceDatabase, scenario_id: String) -> void:
 	var is_hard: bool = scenario_id.contains("HARD")
 	if is_hard:
 		_report_target("hard avg_profit in [-10,40]", avg_profit >= -10.0 and avg_profit <= 40.0, "got %.2f" % avg_profit)
-		_report_target("hard avg_Q >= 71 (P3 tuning target)", avg_q >= 71.0, "got %.2f (P3 not yet applied)" % avg_q)
+		_report_target("hard avg_Q >= 71 (P3 target)", avg_q >= 71.0, "got %.2f" % avg_q)
 		_report_target("hard neg_profit_days in [4,7]", neg_profit_days >= 4 and neg_profit_days <= 7, "got %d" % neg_profit_days)
 	else:
 		_report_target("normal avg_profit > 120", avg_profit > 120.0, "got %.2f" % avg_profit)

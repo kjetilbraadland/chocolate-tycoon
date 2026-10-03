@@ -144,3 +144,33 @@ Observed outcome on HARD_STRESS_14D:
 Interpretation:
 - Direction is correct, but Hard mode still trends into debt growth too often.
 - Next highest-leverage move is P2 (reduce contract target pressure and ease dispatch bottleneck).
+
+## Pass 2 Results (Applied)
+
+Applied knobs (P2 + P3; P1 already applied in Pass 1):
+- P2: ECO_TRUCK_SLOT_COUNT hard: 5 -> 6
+- P2: CONTRACT_C target_units weekly: 150 -> 140
+- P3: ECO_WAGE_QUALITY_MULT hard: 0.10 -> 0.11
+- P3: MCH_TEMPER_01 temp_tolerance_c: 2 -> 2.5
+- P3: MCH_CONCHE_01 breakdown_chance_pct_day: 2.2 -> 2.0
+
+Companion mechanic change (M1 pass 2):
+- Cost model moved from flat per-day to per-HOUR, charged on actual machine
+  runtime (run_ticks). Idle machines cost nothing; opex + wages + energy are
+  all proportional to active hours. This was the root cause of the starter
+  run being deeply unprofitable under the old flat model.
+
+Observed outcome (live Campaign, 14-day, milk bar, CHAIN_A):
+- Normal: profit -24,689 -> +1,999 (now profitable)
+- Hard: profit -27,183 -> +1,938 (now profitable)
+- 53 headless tests pass; BASELINE_NORMAL_14D rollup still reproduces the
+  sheet exactly (delta 0.00).
+
+Interpretation:
+- The per-hour cost model + P2/P3 bring the starter run to a sane,
+  roughly-breakeven-to-profitable state. Both difficulty modes are now
+  positive over 14 days, which is the intended Normal target.
+- Hard mode is still close to breakeven; if it should be tighter, the next
+  lever is P4 (energy price / spoil rate) or a lower Hard start cash.
+- The master sim sheet (HARD_STRESS_14D) still reflects pre-P3 values
+  (avg_Q 69.21); re-run the sheet after Pass 2 to refresh expected_* columns.

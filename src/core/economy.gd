@@ -73,9 +73,17 @@ func record_day(revenue: float, cost: float) -> float:
 func wage_cost(staff: int, wage_policy: float) -> float:
 	return wage_base * staff * wage_policy
 
+# Hourly wage cost: wage_base is a per-day rate; charge per active hour.
+func wage_cost_hours(operator_hours: float, wage_policy: float) -> float:
+	return wage_base / 24.0 * operator_hours * wage_policy
+
 # Energy cost for `power_kw` running `hours`.
 func energy_cost(power_kw: float, hours: float) -> float:
 	return energy_price * power_kw * hours
+
+# Hourly opex: opex_per_day is a per-day rate; charge per active hour.
+func opex_cost_hours(opex_per_day: float, hours: float) -> float:
+	return opex_per_day / 24.0 * hours
 
 # Daily spoilage on `stock_units` of perishables.
 func spoilage(stock_units: float) -> float:
