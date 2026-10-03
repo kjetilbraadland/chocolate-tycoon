@@ -1,0 +1,120 @@
+can you interview me about creating a plan for a tycoon/factory simulator game.
+
+i want it to be about chocolate and i want the main gameplay to be about the factory where i need to create the necessary preocessing steps and scale to sell my chocolate, i want to start with buying basic pre fabricated ingredients and expand into producing more raw materials and then in the end farming my own cocoa beans.
+
+this should allso be about creating recepies.
+
+
+interview round1: 
+
+Perfect, I’ll run this like a real game design interview and start with a focused first round of questions that define your core gameplay loop, progression, and recipe systems. Once you answer, I’ll turn it into a structured game plan document.
+
+Great. Interview round 1:
+
+What kind of tone do you want?
+Options: cozy and relaxing, realistic industrial sim, quirky and funny, competitive and fast-paced.
+
+answer: cozy and relaxing, realistic industrial sim, quirky and funny
+
+What platforms are you targeting first?
+Options: PC only, PC + console, mobile, browser.
+
+answer: pc only
+
+How complex should factory building be?
+Options: simple placement and upgrades, medium complexity with conveyors and routing, deep automation puzzle with optimization.
+
+answer: deep automation puzzle
+
+What is the core player loop in your vision?
+Example format: buy ingredients → process in machines → craft recipes → package chocolate → sell → reinvest.
+
+answer: buy ingredients → process in machines → craft recipes → package chocolate → sell → reinvest.
+
+allso make sugar and cocoa in separate farms. make this easy and just for expanding the value chain. 
+
+allso maybe create a chocolate shop at the factory to sell direcly to customers instead of to supermarkets/shops
+
+
+How should progression eras work?
+You mentioned:
+
+buy pre-made ingredients,
+produce more raw materials,
+farm cocoa beans.
+Do you want these as clear chapters, or a gradual unlock tree?
+What should be the first products the player can make?
+Example: milk chocolate bar, dark bar, truffles, hot chocolate mix.
+
+answer: yes all of those. gradual unlock tree, make own sugar, then cocoa, then milk powder, flavourings, nuts etc.
+
+How deep do you want recipe creation?
+Options: fixed recipes only, editable recipes with ingredient ratios, full R&D system with quality/flavor stats.
+
+answer: Full R&D system with quality inspectors. make it like a lottery. where you can invest in new recepies and maybe it becomes a hit or not. 
+
+Which recipe variables should matter most?
+Options: taste, quality grade, production speed, shelf life, cost, brand appeal.
+
+answer: yes, all of those.
+
+How should machines/process steps feel?
+Do you want realistic steps like roasting, grinding, conching, tempering, molding, wrapping, or a simplified version?
+
+answer: yes, make it complex, 
+
+What is the main challenge type?
+Options: meeting demand, factory bottlenecks, ingredient supply volatility, power/maintenance, workforce management.
+
+answer: make factory bottlenecks and product quality the main challenges.
+
+How should selling work?
+Options: automatic market sales, contracts/orders, own stores, wholesale to retailers, export markets.
+
+answer: have own store, and contracts/orders.
+
+Do you want logistics systems?
+Examples: storage limits, trucks, shipping delays, cold chain for premium products.
+
+answer: yes, storage limits, loading bays for trucks, allso create limited artisan bars for own shop to boost brand. 
+
+How important is farming gameplay in the late game?
+Options: light add-on, full farming sim layer, optional vertical integration path.
+
+answer light add on to improve profitability and have tighter control of quality
+
+Should there be research and tech trees?
+If yes, what branches matter most: machinery, recipes, farming, logistics, branding.
+
+answer: yes, machinery, recipes, farming, logistics, branding.
+
+What failure pressure do you want?
+Options: no fail state (cozy), soft fail (debt pressure), strict fail (bankruptcy/game over).
+
+answer: strict fail (bankruptcy/game over).
+
+Do you want staff/worker systems?
+Examples: hiring, skill levels, shifts, morale, automation replacing labor.
+
+answer: yes, make employees interchangeable and higher pay is better products
+
+How long should a typical play session/campaign feel?
+Example: quick 30-60 min runs, medium 5-10 hour saves, long sandbox 20+ hours.
+
+answer: medium
+
+Any must-have inspirations?
+Which games should this feel similar to, and which should it avoid?
+
+answer: i want something like Factorio and prison tycoon. 
+
+Do you want multiplayer eventually?
+Options: none, co-op factory building, competitive market race.
+
+answer: no.
+
+What are your top 3 non-negotiable features for version 1?
+
+answer: buy raw materials, produce chocolate and sell on own shop 
+
+Reply in any format you want, even rough notes. After your answers, I’ll produce a concrete development plan with systems, milestones, and MVP scope.
