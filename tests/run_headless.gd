@@ -18,7 +18,7 @@ func _initialize() -> void:
 	var args: PackedStringArray = OS.get_cmdline_args()
 	var mode: String = "all"
 	var scenario: String = ""
-	var known := ["unit", "scenario", "all"]
+	var known := ["unit", "scenario", "all", "revalidate"]
 	var mode_idx: int = -1
 	for i in range(args.size()):
 		if known.has(args[i]):
@@ -54,6 +54,9 @@ func _initialize() -> void:
 		else:
 			for sid in db.sim_rows_by_scenario.keys():
 				_test_scenario(db, sid)
+
+	if mode == "revalidate":
+		_revalidate(db)
 
 	print("=== RESULT: %d passed, %d failed ===" % [_passes, _failures])
 	quit(0 if _failures == 0 else 1)
@@ -323,3 +326,60 @@ func _report_target(label: String, met: bool, detail: String = "") -> void:
 	# Informational only — never affects pass/fail (tuning targets, not invariants).
 	var mark: String = "OK  " if met else "MISS"
 	print("    [target:%s] %s%s" % [mark, label, ("" if detail == "" else "  -> " + detail)])
+
+# Re-run a master-sheet scenario through the LIVE per-hour simulation and report
+# the new model's rollup vs the sheet's (old-model) expected values. The sheet
+# is the old flat-cost model's output, so exact match is NOT expected — this
+# surfaces how the per-hour model + P2/P3 behave under the same stress profile.
+func _revalidate(db: BalanceDatabase) -> void:
+	print("\n=== RE-VALIDATION: live per-hour model vs master sheet (old model) ===")
+	var scenarios: Array = ["BASELINE_NORMAL_14D", "HARD_STRESS_14D"]
+	for sid in scenarios:
+		var rows: Array = db.sim_rows_by_scenario.get(sid, [])
+		if rows.is_empty():
+			print("  (no rows for %s — skipping)" % sid)
+			continue
+		var camp := Campaign.new(db, _diff_for(sid), 1,
+			"RCP_MILK_BAR_01", "CHAIN_A", "")
+		var rollup: Dictionary = camp.run_scenario(rows)
+		print("\n  [%s]  live per-hour rollup:" % sid)
+		print("    avg_daily_profit:   %.2f" % rollup.avg_daily_profit)
+		print("    avg_daily_revenue:  %.2f" % rollup.avg_daily_revenue)
+		print("    avg_daily_cost:     %.2f" % rollup.avg_daily_cost)
+		print("    avg_fulfillment:    %.2f%%" % rollup.avg_contract_fulfillment_pct)
+		print("    avg_penalty:        %.2f" % rollup.avg_penalty_cost)
+		print("    avg_quality_Q:      %.2f" % rollup.avg_quality_Q)
+		print("    neg_profit_days:    %d" % rollup.neg_profit_days)
+		print("    grade mix:          A=%d B=%d C=%d D=%d" % [
+			rollup.grade_A, rollup.grade_B, rollup.grade_C, rollup.grade_D])
+		# compare to the sheet's summary (old model)
+		if db.scenario_summaries.has(sid):
+			var sr: Dictionary = db.scenario_summaries[sid]
+			print("    sheet (old model):  profit=%.2f Q=%.2f fulfill=%.2f%%" % [
+				sr.get("avg_daily_profit", "0").to_float(),
+				sr.get("avg_quality_Q", "0").to_float(),
+				sr.get("avg_contract_fulfillment_pct", "0").to_float()])
+		# pass criteria (informational)
+		var is_hard: bool = sid.contains("HARD")
+		if is_hard:
+			_report_target("hard avg_profit in [-10,40]",
+				rollup.avg_daily_profit >= -10.0 and rollup.avg_daily_profit <= 40.0,
+				"got %.2f" % rollup.avg_daily_profit)
+			_report_target("hard avg_Q >= 71", rollup.avg_quality_Q >= 71.0,
+				"got %.2f" % rollup.avg_quality_Q)
+			_report_target("hard neg_profit_days in [4,7]",
+				rollup.neg_profit_days >= 4 and rollup.neg_profit_days <= 7,
+				"got %d" % rollup.neg_profit_days)
+		else:
+			_report_target("normal avg_profit > 120", rollup.avg_daily_profit > 120.0,
+				"got %.2f" % rollup.avg_daily_profit)
+			_report_target("normal avg_fulfillment > 90%",
+				rollup.avg_contract_fulfillment_pct > 90.0,
+				"got %.2f%%" % rollup.avg_contract_fulfillment_pct)
+			_report_target("normal avg_Q B-band (>=70)", rollup.avg_quality_Q >= 70.0,
+				"got %.2f" % rollup.avg_quality_Q)
+
+func _diff_for(sid: String) -> EconomyData.Difficulty:
+	if sid.contains("HARD"):
+		return EconomyData.Difficulty.HARD
+	return EconomyData.Difficulty.NORMAL

@@ -18,6 +18,14 @@ var wage_policy: float = 1.0
 var shop_price_index: float = 1.0
 var daily_production_target: float = 0.0  # units to attempt per day (0 = auto: shop demand base)
 
+# scenario multipliers (from master_simulation_template.csv)
+var input_cost_multiplier: float = 1.0
+var energy_price_multiplier: float = 1.0
+var storage_decay_multiplier: float = 1.0
+var breakdown_multiplier: float = 1.0
+var footfall_event_multiplier: float = 1.0
+var transport_delay_multiplier: float = 1.0
+
 # daily results
 var day_results: Array = []
 
@@ -93,9 +101,9 @@ func close_day() -> Dictionary:
 	var q: float = _compute_quality()
 	var grade: String = sim.scorer.grade_for(q)
 
-	# 4. SELL — shop channel
+	# 4. SELL — shop channel (footfall event multiplier from scenario)
 	var demand: float = sim.shop.daily_demand(recipe.shop_demand_base, shop_price_index,
-		sim.brand_score, sim.category_reputation, 1.0)
+		sim.brand_score, sim.category_reputation, footfall_event_multiplier)
 	var sold: float = sim.shop.sell(demand, finished)
 	var unit_price: float = recipe.base_unit_price * shop_price_index
 	var shop_revenue: float = sold * unit_price
@@ -122,17 +130,20 @@ func close_day() -> Dictionary:
 	# 5. FINANCE — per-HOUR costs coupled to ACTUAL runtime (M1 pass 2)
 	# opex and wages are per-day rates in the CSV; charge per active hour
 	# (run_ticks = minutes actually running). Idle machines cost nothing.
+	# Scenario multipliers (energy/input/decay) applied on top.
 	var opex: float = 0.0
 	var energy: float = 0.0
 	var operator_hours: float = 0.0
 	for m in sim.line.machines:
 		var hours: float = m.run_ticks_today / 60.0
 		opex += sim.economy.opex_cost_hours(m.data.opex_per_day, hours)
-		energy += sim.economy.energy_cost(m.data.power_kw, hours)
+		energy += sim.economy.energy_cost(m.data.power_kw, hours) * energy_price_multiplier
 		operator_hours += hours  # one operator per machine, charged per active hour
 	var wage_cost: float = sim.economy.wage_cost_hours(operator_hours, wage_policy)
-	var input_cost: float = sim.line.raw_consumed_today * recipe.base_unit_cost
-	var cost: float = wage_cost + opex + energy + input_cost
+	var input_cost: float = sim.line.raw_consumed_today * recipe.base_unit_cost * input_cost_multiplier
+	# storage decay (spoilage) on finished goods
+	var spoilage: float = sim.economy.spoilage(finished) * storage_decay_multiplier
+	var cost: float = wage_cost + opex + energy + input_cost + spoilage
 	var revenue: float = shop_revenue
 	sim.economy.record_day(revenue, cost)
 	sim.economy.accrue_interest()
@@ -163,6 +174,80 @@ func close_day() -> Dictionary:
 	if sim.economy.is_bankrupt:
 		sim.bankrupt.emit(sim.day - 1)
 	return result
+
+# Drive the live per-hour simulation with a master-sheet scenario's per-day
+# recipe + multipliers. Returns a rollup Dictionary matching the summary-sheet
+# columns (avg profit/fulfillment/Q/penalty, grade mix, neg-profit days).
+func run_scenario(rows: Array) -> Dictionary:
+	var total_revenue: float = 0.0
+	var total_cost: float = 0.0
+	var total_penalty: float = 0.0
+	var quality_sum: float = 0.0
+	var fulfillment_sum: float = 0.0
+	var neg_profit_days: int = 0
+	var contract_miss_days: int = 0
+	var grade_counts := { "A": 0, "B": 0, "C": 0, "D": 0 }
+	var n: int = 0
+
+	for row in rows:
+		var s: SimScenarioRow = row
+		if not s.enabled:
+			continue
+		# apply this day's recipe + multipliers
+		var r: RecipeData = sim.balance_db.get_recipe(s.recipe_id)
+		if r != null:
+			recipe = r
+		shop_price_index = s.shop_price_multiplier
+		wage_policy = s.wage_policy_multiplier
+		input_cost_multiplier = s.input_cost_multiplier
+		energy_price_multiplier = s.energy_price_multiplier
+		storage_decay_multiplier = s.storage_decay_multiplier
+		footfall_event_multiplier = s.footfall_event_multiplier
+		# production target = this day's expected output (what the plan aimed for)
+		daily_production_target = s.expected_units_output
+
+		# drive the live per-hour loop
+		start_day()
+		for t in range(1440):
+			tick()
+		var res: Dictionary = close_day()
+		day_results.append(res)
+
+		total_revenue += res.shop_revenue
+		total_cost += res.cost
+		quality_sum += res.quality_q
+		grade_counts[res.grade] = grade_counts.get(res.grade, 0) + 1
+		if res.profit < 0.0:
+			neg_profit_days += 1
+		# contract: compare produced vs the day's contract target
+		if s.contract_target_units > 0.0:
+			var fulfill: float = minf(res.units_produced / s.contract_target_units, 1.0) * 100.0
+			fulfillment_sum += fulfill
+			if fulfill < 99.5:
+				contract_miss_days += 1
+			# penalty on the missed volume (simplified; full settle is weekly)
+			var missed: float = maxf(s.contract_target_units - res.units_produced, 0.0)
+			total_penalty += missed * recipe.base_unit_price * s.contract_penalty_rate
+		n += 1
+
+	if n == 0:
+		return { "days": 0 }
+	var nf: float = float(n)
+	return {
+		"days": n,
+		"avg_daily_profit": (total_revenue - total_cost) / nf,
+		"avg_daily_revenue": total_revenue / nf,
+		"avg_daily_cost": total_cost / nf,
+		"avg_contract_fulfillment_pct": fulfillment_sum / nf,
+		"avg_penalty_cost": total_penalty / nf,
+		"avg_quality_Q": quality_sum / nf,
+		"neg_profit_days": neg_profit_days,
+		"contract_miss_days": contract_miss_days,
+		"grade_A": grade_counts.get("A", 0),
+		"grade_B": grade_counts.get("B", 0),
+		"grade_C": grade_counts.get("C", 0),
+		"grade_D": grade_counts.get("D", 0),
+	}
 
 func _settle_week(weekly_units: float, contract: Dictionary,
 		target: float, min_grade: String) -> void:
