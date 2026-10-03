@@ -22,8 +22,6 @@ var line: ProductionLine
 var day: int = 1
 var tick_in_day: int = 0
 var seed: int = 0
-
-# run-level state
 var brand_score: float = 0.5        # global brand 0..1
 var category_reputation: float = 0.5 # category rep 0..1
 var total_units_produced: float = 0.0

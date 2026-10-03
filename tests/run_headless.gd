@@ -46,6 +46,7 @@ func _initialize() -> void:
 		_test_contracts(db)
 		_test_machine(db)
 		_test_csv_integrity(db)
+		_test_campaign(db)
 
 	if mode == "scenario" or mode == "all":
 		if scenario != "":
@@ -182,6 +183,52 @@ func _test_csv_integrity(db: BalanceDatabase) -> void:
 	_check("roaster ideal_temp_c == 130", roaster != null and absf(roaster.ideal_temp_c - 130.0) < 0.01)
 	var debt_limit: float = db.get_economy_value("ECO_DEBT_LIMIT", EconomyData.Difficulty.NORMAL)
 	_check("ECO_DEBT_LIMIT normal == 120000", absf(debt_limit - 120000.0) < 0.01)
+
+func _test_campaign(db: BalanceDatabase) -> void:
+	print("\n[TEST] M1 playable campaign (buy -> produce -> sell -> finance)")
+	# Normal, milk bar, full chain, 14 days, no contract.
+	var camp := Campaign.new(db, EconomyData.Difficulty.NORMAL, 12345,
+		"RCP_MILK_BAR_01", "CHAIN_A", "CONTRACT_A")
+	var summary: Dictionary = camp.run(14)
+	print("    14-day normal: profit=%.2f units=%.0f final_cash=%.2f bankrupt=%s" % [
+		summary.total_profit, summary.total_units_produced,
+		summary.final_cash, str(summary.is_bankrupt)])
+	_check("campaign produced units", summary.total_units_produced > 0.0,
+		"got %.0f" % summary.total_units_produced)
+	_check("campaign generated revenue", summary.total_revenue > 0.0,
+		"got %.2f" % summary.total_revenue)
+	_check("campaign costs incurred", summary.total_cost > 0.0,
+		"got %.2f" % summary.total_cost)
+	_check("14 day results recorded", camp.day_results.size() == 14,
+		"got %d" % camp.day_results.size())
+	# cash flow: final = start + profit (no contract, no interest if debt 0)
+	var expected_final: float = summary.start_cash + summary.total_profit
+	_check("cash flow: final = start + profit",
+		absf(summary.final_cash - expected_final) < 1.0,
+		"final=%.2f expected=%.2f" % [summary.final_cash, expected_final])
+	# quality in a sane band
+	var q_sum: float = 0.0
+	for r in camp.day_results:
+		q_sum += (r as Dictionary).quality_q
+	var avg_q: float = q_sum / 14.0
+	_check("campaign avg quality sane (40..90)", avg_q >= 40.0 and avg_q <= 90.0,
+		"got %.2f" % avg_q)
+	# determinism: same seed -> same result
+	var camp2 := Campaign.new(db, EconomyData.Difficulty.NORMAL, 12345,
+		"RCP_MILK_BAR_01", "CHAIN_A", "CONTRACT_A")
+	var summary2: Dictionary = camp2.run(14)
+	_check("determinism: same seed -> same profit",
+		absf(summary.total_profit - summary2.total_profit) < 0.001,
+		"%.2f vs %.2f" % [summary.total_profit, summary2.total_profit])
+	# hard mode should be tighter than normal
+	var camp_hard := Campaign.new(db, EconomyData.Difficulty.HARD, 12345,
+		"RCP_MILK_BAR_01", "CHAIN_A", "CONTRACT_A")
+	var summary_hard: Dictionary = camp_hard.run(14)
+	print("    14-day hard: profit=%.2f final_cash=%.2f" % [
+		summary_hard.total_profit, summary_hard.final_cash])
+	_check("hard mode start cash < normal",
+		summary_hard.start_cash < summary.start_cash,
+		"hard=%.0f normal=%.0f" % [summary_hard.start_cash, summary.start_cash])
 
 # Run one master-sim scenario. Two-part check:
 #  1. REGRESSION (must pass): the computed rollup reproduces the sheet's own

@@ -8,6 +8,7 @@ extends RefCounted
 var machines: Array = []  # Array[MachineState], ordered stage 1..N
 var source_buffer: float = 0.0
 var finished_output: float = 0.0
+var raw_consumed_today: float = 0.0  # raw material pulled into the line
 var rng: RandomNumberGenerator
 
 func _init(r: RandomNumberGenerator = null) -> void:
@@ -19,6 +20,7 @@ func add_machine(d: MachineData) -> void:
 func reset_day() -> void:
 	source_buffer = 0.0
 	finished_output = 0.0
+	raw_consumed_today = 0.0
 	for m in machines:
 		m.reset_day()
 
@@ -44,6 +46,9 @@ func tick(temp_in_window: bool) -> float:
 	# output is available to the next stage within the same tick).
 	for m in machines:
 		m.tick(temp_in_window)
+	# raw material consumed = stage 1's daily consumption total (assign, not +=)
+	if machines.size() > 0:
+		raw_consumed_today = machines[0].units_consumed_today
 	# last machine's output becomes finished goods
 	if machines.size() > 0:
 		var last: MachineState = machines[machines.size() - 1]
