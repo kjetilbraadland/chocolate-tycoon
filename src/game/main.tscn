@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/game/main.gd" id="1_main"]
+
+[node name="Main" type="Node"]
+script = ExtResource("1_main")
+
+[node name="Status" type="Label" parent="."]
+offset_left = 40.0
+offset_top = 40.0
+offset_right = 1200.0
+offset_bottom = 200.0
+text = "Loading..."

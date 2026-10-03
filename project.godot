@@ -1,0 +1,43 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not manually,
+; but it is fully readable/parseable as plain text.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Chocolate Factory Tycoon"
+config/description="Cozy factory tycoon: design chocolate production lines, build recipes, scale to vertical integration."
+run/main_scene="res://src/game/main.tscn"
+config/features=PackedStringArray("4.7")
+config/icon="res://icon.svg"
+
+[autoload]
+
+BalanceDB="*res://src/autoload/balance_db.gd"
+SaveSystem="*res://src/autoload/save_system.gd"
+GameState="*res://src/autoload/game_state.gd"
+
+[debug]
+
+gdscript/warnings/untyped_parameter=0
+gdscript/warnings/untyped_declaration=0
+gdscript/warnings/unused_variable=1
+gdscript/warnings/unused_parameter=0
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.09, 0.08, 0.07, 1)

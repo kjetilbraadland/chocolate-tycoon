@@ -1,0 +1,21 @@
+# Godot
+.godot/
+*.tmp
+
+# Imported translations
+*.import
+
+# Mono
+.mono/
+
+# Exports / builds
+export/
+build/
+*.zip
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local env
+.env

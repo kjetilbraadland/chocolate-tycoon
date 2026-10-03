@@ -1,0 +1,28 @@
+pack_id,pack_type,key,subkey,value,notes
+CHAIN_A,machine_chain,stage_1,roasting,MCH_ROASTER_01,Milk bar default chain
+CHAIN_A,machine_chain,stage_2,grinding,MCH_GRINDER_01,
+CHAIN_A,machine_chain,stage_3,mixing,MCH_MIXER_01,
+CHAIN_A,machine_chain,stage_4,conching,MCH_CONCHE_01,
+CHAIN_A,machine_chain,stage_5,tempering,MCH_TEMPER_01,
+CHAIN_A,machine_chain,stage_6,molding,MCH_MOLD_01,
+CHAIN_A,machine_chain,stage_7,wrapping,MCH_WRAPPER_01,
+CHAIN_B,machine_chain,stage_1,roasting,MCH_ROASTER_01,Dark bar chain
+CHAIN_B,machine_chain,stage_2,grinding,MCH_GRINDER_01,
+CHAIN_B,machine_chain,stage_3,mixing,MCH_MIXER_01,
+CHAIN_B,machine_chain,stage_4,conching,MCH_CONCHE_01,
+CHAIN_B,machine_chain,stage_5,tempering,MCH_TEMPER_01,
+CHAIN_B,machine_chain,stage_6,molding,MCH_MOLD_01,
+CHAIN_B,machine_chain,stage_7,wrapping,MCH_WRAPPER_01,
+CONTRACT_A,contract_pack,target_units,weekly,180,Starter recurring contract
+CONTRACT_A,contract_pack,min_grade,,B,
+CONTRACT_A,contract_pack,penalty_rate,,0.18,
+CONTRACT_B,contract_pack,target_units,weekly,160,
+CONTRACT_B,contract_pack,min_grade,,B,
+CONTRACT_B,contract_pack,penalty_rate,,0.18,
+CONTRACT_C,contract_pack,target_units,weekly,150,Hard mode stress contract
+CONTRACT_C,contract_pack,min_grade,,B,
+CONTRACT_C,contract_pack,penalty_rate,,0.22,
+BASELINE_NORMAL,scenario,duration_days,,14,Use for first-pass simulation
+BASELINE_NORMAL_14D,scenario,duration_days,,14,Primary 14-day normal baseline dataset in master sheet
+HARD_STRESS,scenario,duration_days,,14,Use for hard mode stress
+HARD_STRESS_14D,scenario,duration_days,,14,Primary 14-day hard stress dataset in master sheet
