@@ -21,7 +21,7 @@ CONTRACT_B,contract_pack,min_grade,,B,
 CONTRACT_B,contract_pack,penalty_rate,,0.18,
 CONTRACT_C,contract_pack,target_units,weekly,150,Hard mode stress contract
 CONTRACT_C,contract_pack,min_grade,,B,
-CONTRACT_C,contract_pack,penalty_rate,,0.25,
+CONTRACT_C,contract_pack,penalty_rate,,0.22,
 BASELINE_NORMAL,scenario,duration_days,,14,Use for first-pass simulation
 BASELINE_NORMAL_14D,scenario,duration_days,,14,Primary 14-day normal baseline dataset in master sheet
 HARD_STRESS,scenario,duration_days,,14,Use for hard mode stress

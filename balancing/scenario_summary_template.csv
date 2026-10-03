@@ -1,0 +1,3 @@
+summary_id,scenario_id,difficulty_mode,days_simulated,avg_daily_revenue,avg_daily_cost,avg_daily_profit,avg_contract_fulfillment_pct,avg_penalty_cost,avg_quality_Q,avg_returns_pct,avg_brand_delta,avg_debt_delta,avg_units_output,avg_shop_demand,grade_A_days,grade_B_days,grade_C_days,grade_D_days,negative_profit_days,contract_miss_days,notes
+SUM_001,BASELINE_NORMAL_14D,NORMAL,14,666.36,500.50,165.86,92.71,13.00,74.14,1.69,0.75,-10.79,306.71,202.00,0,12,2,0,0,14,Healthy baseline with strong profitability
+SUM_002,HARD_STRESS_14D,HARD,14,570.86,550.93,24.65,84.71,34.63,69.21,2.29,0.05,18.56,253.43,162.07,0,7,7,0,5,14,Pass 1 applied: softer penalty pressure and better debt trend
