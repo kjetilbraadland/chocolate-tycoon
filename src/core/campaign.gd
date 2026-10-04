@@ -55,6 +55,10 @@ var rnd_last_outcome: int = -1  # RnD.Outcome of the last resolved project
 var rnd_demand_boost: float = 1.0  # multiplies shop demand (breakout spike)
 var rnd_breakout_days: int = 0  # remaining days of a breakout footfall spike
 
+# M4: progression (unlock tree) + farming side-map.
+var progression: Progression
+var farming: FarmingSystem
+
 func _init(db: BalanceDatabase, d: EconomyData.Difficulty, s: int,
 		r_id: String, c_id: String, p_id: String) -> void:
 	sim = Simulation.new(db, d, s)
@@ -65,6 +69,8 @@ func _init(db: BalanceDatabase, d: EconomyData.Difficulty, s: int,
 	footfall_base = db.get_economy_value("ECO_SHOP_FOOTFALL_BASE", d)
 	input_cost_base = db.get_economy_value("ECO_INPUT_COST_MULT", d)
 	rnd = RnD.new(rng)
+	progression = Progression.new()
+	farming = FarmingSystem.new(rng)
 
 # M2: is this recipe unlocked at the current player tier?
 func is_recipe_unlocked(r_id: String) -> bool:
@@ -140,6 +146,33 @@ func _rnd_project_cost() -> float:
 	var base: float = sim.balance_db.get_economy_value("ECO_RND_PROJECT_BASE_COST", sim.diff)
 	return base * (1.0 + 0.15 * float(rnd_investment_level))
 
+# M4: unlock a supply-chain stage (deducts cost). Returns true on success.
+func unlock_supply_stage(stage: int) -> bool:
+	if not progression.can_unlock_stage(stage, sim.economy.cash, sim.day):
+		return false
+	var cost: float = Progression.STAGE_COST[stage - 1]
+	sim.economy.cash -= cost
+	sim.total_cost += cost
+	return progression.unlock_stage(stage, sim.economy.cash + cost, sim.day)
+
+# M4: unlock a tech branch (deducts cost). Returns true on success.
+func unlock_tech_branch(branch: int) -> bool:
+	if not progression.can_unlock_branch(branch, sim.economy.cash, sim.day):
+		return false
+	var cost: float = Progression.BRANCH_COST[branch]
+	sim.economy.cash -= cost
+	sim.total_cost += cost
+	return progression.unlock_branch(branch, sim.economy.cash + cost, sim.day)
+
+# M4: place a farm plot (costs a small setup fee). Returns the new plot count.
+func place_farm_plot(crop: FarmingSystem.Crop) -> int:
+	var fee: float = 2500.0
+	if sim.economy.cash < fee:
+		return farming.plot_count(crop)
+	sim.economy.cash -= fee
+	sim.total_cost += fee
+	return farming.add_plot(crop)
+
 # Run a full campaign of `days` days (headless). Returns a summary Dictionary.
 func run(days: int, contract_pack_id: String = "") -> Dictionary:
 	var contract: Dictionary = sim.balance_db.get_contract_pack(contract_pack_id)
@@ -188,6 +221,9 @@ func run(days: int, contract_pack_id: String = "") -> Dictionary:
 # so there is no excess finished-goods cost. The day's demand is stored for
 # the sell step so production and sales use the same figure.
 func start_day() -> void:
+	# M4: advance the farming side-map (plots produce; scheduled transport
+	# ships output back to the factory, lowering the input cost floor).
+	farming.tick_day(sim.day)
 	var target: float = daily_production_target
 	if target <= 0.0:
 		target = recipe.shop_demand_base  # auto: produce to expected shop demand
@@ -251,7 +287,9 @@ func close_day() -> Dictionary:
 		energy += sim.economy.energy_cost(m.data.power_kw, hours) * energy_price_multiplier
 		operator_hours += hours  # one operator per machine, charged per active hour
 	var wage_cost: float = sim.economy.wage_cost_hours(operator_hours, wage_policy)
-	var input_cost: float = sim.line.raw_consumed_today * recipe.base_unit_cost * input_cost_multiplier * input_cost_base
+	# M4: farming (in-house inputs) lowers the input cost floor (1.0 with no plots)
+	var input_cost: float = sim.line.raw_consumed_today * recipe.base_unit_cost \
+		* input_cost_multiplier * input_cost_base * farming.input_cost_multiplier()
 	# storage decay (spoilage) on finished goods
 	var spoilage: float = sim.economy.spoilage(finished) * storage_decay_multiplier
 	var cost: float = wage_cost + opex + energy + input_cost + spoilage
@@ -410,8 +448,9 @@ func _quality_components() -> Dictionary:
 	var c: float = 100.0 - stoppage_ratio * 40.0 - float(breakdowns) * 5.0 \
 		+ float(rnd_inspector_tier) * 2.0
 	var f: float = 95.0
+	# M4: farming (in-house inputs) improves quality control (sanitation)
 	var s: float = 100.0 - float(breakdowns) * 8.0 \
-		+ float(rnd_inspector_tier) * 3.0
+		+ float(rnd_inspector_tier) * 3.0 + farming.quality_bonus()
 	var w: float = sim.economy.wage_base * wage_policy * \
 		sim.balance_db.get_economy_value("ECO_WAGE_QUALITY_MULT", sim.diff) * 2.0
 	w = clampf(w, 0.0, 100.0)

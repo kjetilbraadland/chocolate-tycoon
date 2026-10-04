@@ -49,6 +49,7 @@ func _initialize() -> void:
 		_test_campaign(db)
 		_test_m2(db)
 		_test_m3(db)
+		_test_m4(db)
 
 	if mode == "scenario" or mode == "all":
 		if scenario != "":
@@ -522,3 +523,62 @@ func _test_m3(db: BalanceDatabase) -> void:
 		+ 0.15 * comps0.F + 0.10 * comps0.S + 0.10 * comps0.W
 	_check("Q matches locked weighted formula",
 		absf(comps0.Q - q_manual) < 0.01, "Q=%.2f manual=%.2f" % [comps0.Q, q_manual])
+
+func _test_m4(db: BalanceDatabase) -> void:
+	print("\n[TEST] M4: unlock tree + in-house sugar/cocoa + farming side-map")
+
+	# --- Unlock tree (gradual, cost + min-day gated) ---
+	var camp := Campaign.new(db, EconomyData.Difficulty.NORMAL, 7,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp.sim.economy.cash = 100000.0
+	camp.sim.day = 30  # past all min-day gates
+	# stage 1 (raw purchase) is the starting state; stage 2 (in-house sugar) unlockable
+	_check("stage 2 available at start (prereq met)", camp.progression.stage_available(2))
+	_check("unlock stage 2 (in-house sugar)", camp.unlock_supply_stage(2))
+	_check("in-house sugar available after unlock", camp.progression.inhouse_sugar())
+	_check("in-house cocoa NOT yet available", not camp.progression.inhouse_cocoa())
+	_check("unlock stage 3 (in-house cocoa)", camp.unlock_supply_stage(3))
+	_check("in-house cocoa available after unlock", camp.progression.inhouse_cocoa())
+	# a stage can't be unlocked without cash
+	camp.sim.economy.cash = 0.0
+	_check("can't unlock without cash", not camp.unlock_supply_stage(4))
+	# tech branch unlock
+	camp.sim.economy.cash = 100000.0
+	_check("unlock farming branch", camp.unlock_tech_branch(Progression.TechBranch.FARMING))
+	_check("farming available (branch)", camp.progression.farming_available())
+
+	# --- Farming side-map (plots + scheduled transport) ---
+	var farm := FarmingSystem.new()
+	_check("no plots at start", farm.plot_count(FarmingSystem.Crop.SUGAR) == 0)
+	_check("input cost multiplier is 1.0 with no plots",
+		absf(farm.input_cost_multiplier() - 1.0) < 0.01)
+	farm.add_plot(FarmingSystem.Crop.SUGAR)
+	farm.add_plot(FarmingSystem.Crop.COCOA)
+	_check("sugar plot placed", farm.plot_count(FarmingSystem.Crop.SUGAR) == 1)
+	_check("cocoa plot placed", farm.plot_count(FarmingSystem.Crop.COCOA) == 1)
+	# advance days: plots produce; transport fires every 2 days
+	var shipped: float = 0.0
+	for d in range(6):
+		shipped += farm.tick_day(d)
+	_check("transport ships output back (shipped_total > 0)",
+		farm.shipped_total > 0.0, "got %.0f" % farm.shipped_total)
+	# in-house supply lowers the input cost multiplier
+	_check("farming lowers input cost multiplier (< 1.0)",
+		farm.input_cost_multiplier() < 1.0, "got %.3f" % farm.input_cost_multiplier())
+	# in-house inputs improve quality control
+	_check("farming adds a quality bonus (> 0)",
+		farm.quality_bonus() > 0.0, "got %.1f" % farm.quality_bonus())
+
+	# --- Farming wired into the campaign (input cost floor) ---
+	var camp2 := Campaign.new(db, EconomyData.Difficulty.NORMAL, 7,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp2.place_farm_plot(FarmingSystem.Crop.SUGAR)
+	_check("place_farm_plot deducts fee + adds plot",
+		camp2.farming.plot_count(FarmingSystem.Crop.SUGAR) == 1)
+	# after a few days of farming, the input cost multiplier drops below 1.0
+	for i in range(4):
+		camp2.sim.day = i
+		camp2.farming.tick_day(i)
+	_check("campaign farming lowers input cost multiplier",
+		camp2.farming.input_cost_multiplier() < 1.0,
+		"got %.3f" % camp2.farming.input_cost_multiplier())
