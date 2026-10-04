@@ -4,6 +4,7 @@ extends Node
 ## M5: also adds the HUD layer (bottleneck / quality / pacing panels).
 
 var _hud: CanvasLayer = null
+var _mgmt: CanvasLayer = null
 
 func _ready() -> void:
 	if BalanceDB.is_ready():
@@ -25,3 +26,7 @@ func _ready() -> void:
 	var hud: CanvasLayer = load("res://src/game/hud_view.gd").new()
 	add_child(hud)
 	_hud = hud
+	# add the M5 management layer (unlock tree / farming / R&D)
+	var mgmt: CanvasLayer = load("res://src/game/management_view.gd").new()
+	add_child(mgmt)
+	_mgmt = mgmt

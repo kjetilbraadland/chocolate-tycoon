@@ -660,6 +660,9 @@ func _test_m5(db: BalanceDatabase) -> void:
 	# --- M5 HUD layer: build headlessly, wire a campaign, assert rendered text ---
 	_test_m5_hud(db)
 
+	# --- M5 management panel: build headlessly, assert text + drive actions ---
+	_test_m5_mgmt(db)
+
 func _test_m5_hud(db: BalanceDatabase) -> void:
 	print("\n[TEST] M5 HUD: build + update + rendered text")
 	# the GameState autoload (the HUD reads GameState.campaign)
@@ -708,3 +711,51 @@ func _test_m5_hud(db: BalanceDatabase) -> void:
 	_check("HUD toggle_panel flips state", hud._panel_open != was_open)
 	hud.toggle_panel()
 	root.remove_child(hud)
+
+func _test_m5_mgmt(db: BalanceDatabase) -> void:
+	print("\n[TEST] M5 management: unlock tree + farming + R&D panel")
+	var gs: Node = root.get_node("GameState")
+	if gs == null:
+		_check("GameState autoload present", false, "root.get_node('GameState') == null")
+		return
+	var camp := Campaign.new(db, EconomyData.Difficulty.NORMAL, 7,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp.run(3)
+	gs.campaign = camp
+	gs.running = false
+	var mgmt: CanvasLayer = load("res://src/game/management_view.gd").new()
+	root.add_child(mgmt)
+	mgmt._update()
+	# unlock tree section
+	_check("mgmt: stages rendered", mgmt._labels["stages"].text.length() > 0,
+		"got: %s" % mgmt._labels["stages"].text)
+	_check("mgmt: branches rendered", mgmt._labels["branches"].text.length() > 0,
+		"got: %s" % mgmt._labels["branches"].text)
+	_check("mgmt: stage 1 (raw) shown unlocked", mgmt._labels["stages"].text.contains("Raw purchase"))
+	# farming section
+	_check("mgmt: farming plots rendered", mgmt._labels["farm_plots"].text.contains("sugar"))
+	_check("mgmt: farming effects rendered", mgmt._labels["farm_effects"].text.contains("input cost"))
+	# R&D section
+	_check("mgmt: R&D state rendered", mgmt._labels["rnd_state"].text.contains("investment"))
+	_check("mgmt: R&D odds rendered (4 outcomes)", mgmt._labels["rnd_odds"].text.contains("breakout"),
+		"got: %s" % mgmt._labels["rnd_odds"].text)
+	# --- drive the action methods (buttons can't be clicked headlessly) ---
+	# give the campaign cash so unlocks/farming/R&D can be afforded
+	camp.sim.economy.cash = 100000.0
+	camp.sim.day = 30  # past all min-day gates
+	# unlock stage 2 (in-house sugar)
+	_check("mgmt: action_unlock_stage(2) succeeds", mgmt.action_unlock_stage(2))
+	_check("mgmt: in-house sugar now available", camp.progression.inhouse_sugar())
+	# place a sugar plot
+	var before: int = camp.farming.plot_count(FarmingSystem.Crop.SUGAR)
+	var after: int = mgmt.action_place_farm(FarmingSystem.Crop.SUGAR)
+	_check("mgmt: action_place_farm adds a plot", after == before + 1, "before=%d after=%d" % [before, after])
+	# start an R&D project
+	_check("mgmt: action_start_rnd succeeds", mgmt.action_start_rnd())
+	_check("mgmt: R&D now active", camp.rnd_active)
+	# toggle panel
+	var was_open: bool = mgmt._panel_open
+	mgmt.toggle_panel()
+	_check("mgmt: toggle_panel flips state", mgmt._panel_open != was_open)
+	mgmt.toggle_panel()
+	root.remove_child(mgmt)
