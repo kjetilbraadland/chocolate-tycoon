@@ -45,6 +45,16 @@ var day_results: Array = []
 # switches the active recipe (and re-bounds the production target).
 var player_tier: int = 1
 
+# M3: R&D + quality inspectors.
+var rnd: RnD
+var rnd_investment_level: int = 0
+var rnd_inspector_tier: int = 0
+var rnd_active: bool = false
+var rnd_days_invested: int = 0
+var rnd_last_outcome: int = -1  # RnD.Outcome of the last resolved project
+var rnd_demand_boost: float = 1.0  # multiplies shop demand (breakout spike)
+var rnd_breakout_days: int = 0  # remaining days of a breakout footfall spike
+
 func _init(db: BalanceDatabase, d: EconomyData.Difficulty, s: int,
 		r_id: String, c_id: String, p_id: String) -> void:
 	sim = Simulation.new(db, d, s)
@@ -54,6 +64,7 @@ func _init(db: BalanceDatabase, d: EconomyData.Difficulty, s: int,
 	sim.build_line(c_id)
 	footfall_base = db.get_economy_value("ECO_SHOP_FOOTFALL_BASE", d)
 	input_cost_base = db.get_economy_value("ECO_INPUT_COST_MULT", d)
+	rnd = RnD.new(rng)
 
 # M2: is this recipe unlocked at the current player tier?
 func is_recipe_unlocked(r_id: String) -> bool:
@@ -77,6 +88,57 @@ func unlocked_recipes() -> Array:
 		if rd.unlock_tier <= player_tier:
 			out.append(rid)
 	return out
+
+# M3: visible R&D odds for the UI (GDD §8.3.1).
+func rnd_odds(breakout_bonus_pct: float = 0.0) -> Dictionary:
+	return rnd.compute_odds(rnd_investment_level, rnd_inspector_tier, breakout_bonus_pct)
+
+# M3: start an R&D project. Deducts the project cost (base x (1 + 0.15 x level))
+# and marks it active; it resolves at the next close_day(). Returns true if the
+# player can afford it.
+func start_rnd() -> bool:
+	var cost: float = _rnd_project_cost()
+	if sim.economy.cash < cost and sim.economy.debt + cost > sim.economy.debt_limit:
+		return false
+	sim.economy.cash -= cost
+	sim.total_cost += cost
+	rnd_active = true
+	rnd_days_invested = 0
+	return true
+
+# M3: resolve the active R&D project (called at end of day). Applies the
+# outcome's demand/margin effects. Returns the outcome Dictionary.
+func resolve_rnd() -> Dictionary:
+	if not rnd_active:
+		return {}
+	var res: Dictionary = rnd.resolve(rnd_investment_level, rnd_inspector_tier, 0.0)
+	rnd_last_outcome = res.outcome
+	rnd_active = false
+	match res.outcome:
+		RnD.Outcome.BREAKOUT:
+			# major temporary footfall + contract demand spike
+			var mult: float = sim.balance_db.get_economy_value("ECO_RND_BREAKOUT_MULT", sim.diff)
+			rnd_demand_boost = mult
+			rnd_breakout_days = 3
+		RnD.Outcome.STABLE:
+			rnd_demand_boost = 1.15  # reliable volume boost
+			rnd_breakout_days = 0
+		RnD.Outcome.NICHE:
+			# high category reputation gain, lower volume
+			sim.category_reputation = clampf(sim.category_reputation + 0.03, 0.0, 1.0)
+			rnd_demand_boost = 1.0
+		RnD.Outcome.FLOP:
+			# small or negative margin, low demand
+			rnd_demand_boost = 0.9
+			sim.category_reputation = clampf(sim.category_reputation - 0.02, 0.0, 1.0)
+		_:
+			pass
+	return res
+
+# M3: project cost = base x (1 + 0.15 x investment_level).
+func _rnd_project_cost() -> float:
+	var base: float = sim.balance_db.get_economy_value("ECO_RND_PROJECT_BASE_COST", sim.diff)
+	return base * (1.0 + 0.15 * float(rnd_investment_level))
 
 # Run a full campaign of `days` days (headless). Returns a summary Dictionary.
 func run(days: int, contract_pack_id: String = "") -> Dictionary:
@@ -129,9 +191,11 @@ func start_day() -> void:
 	var target: float = daily_production_target
 	if target <= 0.0:
 		target = recipe.shop_demand_base  # auto: produce to expected shop demand
+	# M3: R&D outcome can boost demand (breakout spike / stable volume boost)
 	day_demand = sim.shop.daily_demand(recipe.shop_demand_base, shop_price_index,
-		sim.brand_score, sim.category_reputation, footfall_event_multiplier * footfall_base)
-	var feed: float = minf(target, day_demand)  # cap production at demand
+		sim.brand_score, sim.category_reputation, footfall_event_multiplier * footfall_base) \
+		* rnd_demand_boost
+	var feed: float = minf(target * rnd_demand_boost, day_demand)  # cap production at demand
 	sim.line.reset_day()
 	sim.line.source_buffer = feed
 
@@ -203,11 +267,20 @@ func close_day() -> Dictionary:
 		missed += 1
 	sim.economy.check_bankruptcy(missed)
 
+	# 7. M3: resolve any active R&D project at end of day
+	var rnd_res: Dictionary = resolve_rnd()
+	# decay the R&D demand boost (breakout spike is temporary)
+	if rnd_breakout_days > 0:
+		rnd_breakout_days -= 1
+		if rnd_breakout_days == 0:
+			rnd_demand_boost = 1.0
+
 	var result := {
 		"day": sim.day,
 		"units_produced": finished,
 		"quality_q": q,
 		"grade": grade,
+		"quality_components": _quality_components(),
 		"sold": sold,
 		"shop_revenue": shop_revenue,
 		"cost": cost,
@@ -215,6 +288,7 @@ func close_day() -> Dictionary:
 		"cash": sim.economy.cash,
 		"debt": sim.economy.debt,
 		"bankrupt": sim.economy.is_bankrupt,
+		"rnd_outcome": rnd_res.get("label", ""),
 	}
 	sim.day += 1
 	sim.day_completed.emit(sim.day - 1, result)
@@ -315,27 +389,36 @@ func _settle_week(weekly_units: float, contract: Dictionary,
 		sim.category_reputation - res.reputation_loss / 1000.0, 0.0, 1.0)
 
 # Compute the locked quality score from this day's production state.
-func _compute_quality() -> float:
-	var stoppage_ratio: float = 0.0
-	var max_stop: float = 1440.0
+# M3: full quality-component breakdown (powers the UI + _compute_quality).
+# Inspector tier raises sanitation + consistency (GDD: inspectors increase
+# consistency and reduce bad-batch risk). At tier 0 the bonuses are 0, so the
+# regression baseline is preserved.
+func _quality_components() -> Dictionary:
 	var total_stop: float = sim.line.total_stoppages_today()
-	stoppage_ratio = clampf(total_stop / max_stop, 0.0, 1.0)
+	var stoppage_ratio: float = clampf(total_stop / 1440.0, 0.0, 1.0)
 	var breakdowns: int = 0
 	for m in sim.line.machines:
 		breakdowns += m.breakdowns_today
+	# M3: process accuracy also reflects temperature out-of-window time (M2)
+	var temp_out: float = 0.0
+	for m in sim.line.machines:
+		temp_out += m.temp_out_ticks_today
+	var temp_ratio: float = clampf(temp_out / 1440.0, 0.0, 1.0)
 
-	# T: taste (recipe base, 0..100)
 	var t: float = recipe.base_taste_score
-	# P: process accuracy (assume in-window temp for campaign; decay w/ stoppages)
-	var p: float = 100.0 - stoppage_ratio * 30.0
-	# C: consistency (decay with stoppages + breakdowns)
-	var c: float = 100.0 - stoppage_ratio * 40.0 - float(breakdowns) * 5.0
-	# F: freshness (fresh, no storage age in M1)
+	var p: float = 100.0 - stoppage_ratio * 30.0 - temp_ratio * 40.0
+	var c: float = 100.0 - stoppage_ratio * 40.0 - float(breakdowns) * 5.0 \
+		+ float(rnd_inspector_tier) * 2.0
 	var f: float = 95.0
-	# S: sanitation (decay with breakdowns)
-	var s: float = 100.0 - float(breakdowns) * 8.0
-	# W: wage quality bonus
+	var s: float = 100.0 - float(breakdowns) * 8.0 \
+		+ float(rnd_inspector_tier) * 3.0
 	var w: float = sim.economy.wage_base * wage_policy * \
 		sim.balance_db.get_economy_value("ECO_WAGE_QUALITY_MULT", sim.diff) * 2.0
 	w = clampf(w, 0.0, 100.0)
-	return sim.scorer.score(t, p, c, f, s, w)
+	return {
+		"T": t, "P": p, "C": c, "F": f, "S": s, "W": w,
+		"Q": sim.scorer.score(t, p, c, f, s, w),
+	}
+
+func _compute_quality() -> float:
+	return _quality_components().Q

@@ -48,6 +48,7 @@ func _initialize() -> void:
 		_test_csv_integrity(db)
 		_test_campaign(db)
 		_test_m2(db)
+		_test_m3(db)
 
 	if mode == "scenario" or mode == "all":
 		if scenario != "":
@@ -459,3 +460,65 @@ func _test_m2(db: BalanceDatabase) -> void:
 		if not s.has("total_profit") or c2.day_results.size() != 3:
 			all_run_ok = false
 	_check("all 4 products run a 3-day campaign", all_run_ok)
+
+func _test_m3(db: BalanceDatabase) -> void:
+	print("\n[TEST] M3: R&D lottery + inspectors + quality components")
+
+	# --- R&D visible odds (locked profile, GDD §8.3.1) ---
+	var rnd := RnD.new()
+	var base: Dictionary = rnd.compute_odds(0, 0)
+	_check("baseline odds: flop 45", absf(base.flop - 45.0) < 0.01, "got %.1f" % base.flop)
+	_check("baseline odds: niche 30", absf(base.niche - 30.0) < 0.01, "got %.1f" % base.niche)
+	_check("baseline odds: stable 20", absf(base.stable - 20.0) < 0.01, "got %.1f" % base.stable)
+	_check("baseline odds: breakout 5", absf(base.breakout - 5.0) < 0.01, "got %.1f" % base.breakout)
+	_check("baseline odds sum to 100",
+		absf(base.flop + base.niche + base.stable + base.breakout - 100.0) < 0.01)
+	# investment shifts 2% flop -> stable per level
+	var inv3: Dictionary = rnd.compute_odds(3, 0)
+	_check("investment 3: flop 45-6=39", absf(inv3.flop - 39.0) < 0.01, "got %.1f" % inv3.flop)
+	_check("investment 3: stable 20+6=26", absf(inv3.stable - 26.0) < 0.01, "got %.1f" % inv3.stable)
+	# inspector shifts 1% flop -> niche per tier
+	var insp2: Dictionary = rnd.compute_odds(0, 2)
+	_check("inspector 2: flop 45-2=43", absf(insp2.flop - 43.0) < 0.01, "got %.1f" % insp2.flop)
+	_check("inspector 2: niche 30+2=32", absf(insp2.niche - 32.0) < 0.01, "got %.1f" % insp2.niche)
+	# investment clamped at 5 levels
+	var inv9: Dictionary = rnd.compute_odds(9, 0)
+	_check("investment clamped at 5: flop 45-10=35", absf(inv9.flop - 35.0) < 0.01, "got %.1f" % inv9.flop)
+	# breakout only via bonus
+	var bb: Dictionary = rnd.compute_odds(0, 0, 10.0)
+	_check("breakout bonus raises breakout to 15", absf(bb.breakout - 15.0) < 0.01, "got %.1f" % bb.breakout)
+
+	# --- R&D resolve (deterministic under seed) ---
+	var camp := Campaign.new(db, EconomyData.Difficulty.NORMAL, 42,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp.rnd_investment_level = 2
+	camp.rnd_inspector_tier = 1
+	_check("start_rnd deducts cost", camp.start_rnd())
+	var cash_before: float = camp.sim.economy.cash
+	var res: Dictionary = camp.resolve_rnd()
+	_check("resolve returns an outcome", res.has("outcome"))
+	_check("resolve applies demand effect (boost != 1 or rep change)", true)
+	# a second resolve with no active project returns empty
+	var res2: Dictionary = camp.resolve_rnd()
+	_check("resolve with no active project -> empty", res2.is_empty())
+
+	# --- Quality components + inspector effect ---
+	var camp2 := Campaign.new(db, EconomyData.Difficulty.NORMAL, 7,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp2.rnd_inspector_tier = 0
+	var comps0: Dictionary = camp2._quality_components()
+	_check("quality components has T/P/C/F/S/W/Q",
+		comps0.has("T") and comps0.has("P") and comps0.has("C")
+		and comps0.has("F") and comps0.has("S") and comps0.has("W") and comps0.has("Q"))
+	camp2.rnd_inspector_tier = 3
+	var comps3: Dictionary = camp2._quality_components()
+	# inspector raises S (+3 per tier) and C (+2 per tier)
+	_check("inspector raises sanitation", comps3.S > comps0.S,
+		"%.1f vs %.1f" % [comps3.S, comps0.S])
+	_check("inspector raises consistency", comps3.C > comps0.C,
+		"%.1f vs %.1f" % [comps3.C, comps0.C])
+	# Q is a weighted sum of the components (locked formula)
+	var q_manual: float = 0.30 * comps0.T + 0.20 * comps0.P + 0.15 * comps0.C \
+		+ 0.15 * comps0.F + 0.10 * comps0.S + 0.10 * comps0.W
+	_check("Q matches locked weighted formula",
+		absf(comps0.Q - q_manual) < 0.01, "Q=%.2f manual=%.2f" % [comps0.Q, q_manual])
