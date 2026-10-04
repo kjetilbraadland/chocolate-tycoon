@@ -24,11 +24,23 @@ var stoppage_ticks_today: float = 0.0
 var run_ticks_today: float = 0.0 # ticks actually running (for energy cost)
 var units_consumed_today: float = 0.0
 
+# M2: real temperature model. Each machine's temperature is a controlled
+# random-walk that pulls toward its ideal but can drift out of the tolerance
+# window. When enabled, a machine only runs while its temp is in window —
+# so a tight-tolerance machine (tempering, 2.5C) can genuinely stall.
+var temperature_model_enabled: bool = false
+var current_temp: float = 0.0
+var temp_out_ticks_today: float = 0.0
+# M2: bottleneck detection — why the machine is NOT running.
+var starved_ticks_today: float = 0.0  # no input available
+var blocked_ticks_today: float = 0.0  # output buffer full
+
 var rng: RandomNumberGenerator
 
 func _init(d: MachineData, r: RandomNumberGenerator = null) -> void:
 	data = d
 	rng = r if r != null else RandomNumberGenerator.new()
+	current_temp = d.ideal_temp_c
 
 func reset_day() -> void:
 	input_buffer = 0.0
@@ -39,6 +51,10 @@ func reset_day() -> void:
 	stoppage_ticks_today = 0.0
 	run_ticks_today = 0.0
 	units_consumed_today = 0.0
+	temp_out_ticks_today = 0.0
+	starved_ticks_today = 0.0
+	blocked_ticks_today = 0.0
+	current_temp = data.ideal_temp_c
 	if state == State.BREAKDOWN or state == State.REPAIRING:
 		state = State.IDLE
 
@@ -46,9 +62,16 @@ func reset_day() -> void:
 func rate_per_tick() -> float:
 	return data.throughput_units_per_min
 
-# Advance one tick. temp_in_window: delivered temperature within tolerance.
+# M2: is the machine's current temperature within its tolerance window?
+func temp_in_window() -> bool:
+	if not temperature_model_enabled:
+		return true
+	return absf(current_temp - data.ideal_temp_c) <= data.temp_tolerance_c
+
+# Advance one tick. temp_in_window: delivered temperature within tolerance
+# (legacy param; the M2 internal model supersedes it when enabled).
 # Returns units produced this tick.
-func tick(temp_in_window: bool) -> float:
+func tick(temp_in_window: bool = true) -> float:
 	if state == State.REPAIRING:
 		repair_remaining -= 1.0
 		if repair_remaining <= 0.0:
@@ -60,9 +83,17 @@ func tick(temp_in_window: bool) -> float:
 		stoppage_ticks_today += 1.0
 		return 0.0
 
+	# M2: advance the temperature random-walk (pulls to ideal, can drift out).
+	if temperature_model_enabled:
+		_advance_temp()
+
+	var temp_ok: bool = temp_in_window() if temperature_model_enabled else temp_in_window
+	if not temp_ok:
+		temp_out_ticks_today += 1.0
+
 	var rate: float = rate_per_tick()
 	# Can we run? Need input, output space, temp in window.
-	if input_buffer >= 1.0 and output_buffer < float(data.output_buffer_units) and temp_in_window and rate > 0.0:
+	if input_buffer >= 1.0 and output_buffer < float(data.output_buffer_units) and temp_ok and rate > 0.0:
 		state = State.RUNNING
 		run_ticks_today += 1.0
 		# proportional consumption/production, bounded by available input and
@@ -80,7 +111,19 @@ func tick(temp_in_window: bool) -> float:
 		# idle (starved, blocked, or temp out of window)
 		state = State.IDLE
 		stoppage_ticks_today += 1.0
+		if input_buffer < 1.0:
+			starved_ticks_today += 1.0
+		elif output_buffer >= float(data.output_buffer_units):
+			blocked_ticks_today += 1.0
 		return 0.0
+
+# M2: temperature random-walk. Pulls toward ideal with a stochastic drift
+# sized so a tight-tolerance machine (tempering, 2.5C) can occasionally leave
+# the window. Deterministic under a seeded RNG.
+func _advance_temp() -> void:
+	var pull: float = (data.ideal_temp_c - current_temp) * 0.15
+	var drift: float = rng.randf_range(-1.0, 1.0) * 2.2
+	current_temp += pull + drift
 
 # Enter breakdown (called by simulation when the daily roll triggers it).
 func enter_breakdown() -> void:

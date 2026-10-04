@@ -47,6 +47,7 @@ func _initialize() -> void:
 		_test_machine(db)
 		_test_csv_integrity(db)
 		_test_campaign(db)
+		_test_m2(db)
 
 	if mode == "scenario" or mode == "all":
 		if scenario != "":
@@ -383,3 +384,78 @@ func _diff_for(sid: String) -> EconomyData.Difficulty:
 	if sid.contains("HARD"):
 		return EconomyData.Difficulty.HARD
 	return EconomyData.Difficulty.NORMAL
+
+func _test_m2(db: BalanceDatabase) -> void:
+	print("\n[TEST] M2: temperature model + bottleneck detection + multi-product")
+
+	# --- Temperature model ---
+	# A tight-tolerance machine (tempering, 2.5C) with the temp model enabled
+	# should produce less than the same machine with the model disabled
+	# (the temp random-walk occasionally pushes it out of window).
+	var temper: MachineData = db.get_machine("MCH_TEMPER_01")
+	_check("temper machine loaded", temper != null)
+	var m_on := MachineState.new(temper)
+	m_on.temperature_model_enabled = true
+	var m_off := MachineState.new(temper)
+	m_off.temperature_model_enabled = false
+	var prod_on: float = 0.0
+	var prod_off: float = 0.0
+	for i in range(1440):
+		m_on.input_buffer = 100.0
+		m_off.input_buffer = 100.0
+		m_on.output_buffer = 0.0  # keep output drained so only temp limits production
+		m_off.output_buffer = 0.0
+		prod_on += m_on.tick()
+		prod_off += m_off.tick()
+	_check("temp model reduces output vs off (temper stalls)",
+		prod_on < prod_off, "on=%.0f off=%.0f" % [prod_on, prod_off])
+	_check("temp model registers out-of-window ticks",
+		m_on.temp_out_ticks_today > 0.0, "got %.0f" % m_on.temp_out_ticks_today)
+	# default (model off) is unchanged: a wrapper with input produces at full rate
+	var wrap: MachineData = db.get_machine("MCH_WRAPPER_01")
+	var m_w := MachineState.new(wrap)
+	m_w.input_buffer = 100.0
+	var pw: float = m_w.tick()
+	_check("default (model off) wrapper produces at full rate",
+		pw > 0.0 and m_w.temp_out_ticks_today == 0.0)
+
+	# --- Bottleneck detection ---
+	var line := ProductionLine.new()
+	var chain: Array = db.lookup.chain_machine_ids("CHAIN_A")
+	for cid in chain:
+		var md2: MachineData = db.get_machine(cid)
+		if md2 != null:
+			line.add_machine(md2)
+	var feed: float = 500.0
+	for i in range(120):
+		line.source_buffer = feed
+		line.tick(true)
+	var rep: Dictionary = line.bottleneck_report()
+	_check("bottleneck: lowest throughput is the conche (10/min)",
+		rep.lowest_throughput == "MCH_CONCHE_01", "got " + rep.lowest_throughput)
+	_check("bottleneck report has starved/blocked fields",
+		rep.has("most_starved") and rep.has("most_blocked"))
+
+	# --- Multi-product + unlock gating ---
+	var camp := Campaign.new(db, EconomyData.Difficulty.NORMAL, 7,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp.player_tier = 1
+	_check("tier 1: milk bar unlocked", camp.is_recipe_unlocked("RCP_MILK_BAR_01"))
+	_check("tier 1: dark bar unlocked", camp.is_recipe_unlocked("RCP_DARK_BAR_01"))
+	_check("tier 1: truffle (tier 2) locked", not camp.is_recipe_unlocked("RCP_TRUFFLE_01"))
+	_check("tier 1: select truffle rejected", not camp.select_product("RCP_TRUFFLE_01"))
+	camp.player_tier = 2
+	_check("tier 2: truffle unlocked", camp.is_recipe_unlocked("RCP_TRUFFLE_01"))
+	_check("tier 2: select truffle succeeds", camp.select_product("RCP_TRUFFLE_01"))
+	_check("select switches active recipe",
+		camp.recipe.recipe_id == "RCP_TRUFFLE_01")
+	_check("unlocked_recipes lists tier-2 set",
+		camp.unlocked_recipes().size() == 4, "got %d" % camp.unlocked_recipes().size())
+	# all 4 products run a short campaign headlessly without error
+	var all_run_ok: bool = true
+	for rid in ["RCP_MILK_BAR_01", "RCP_DARK_BAR_01", "RCP_TRUFFLE_01", "RCP_HOTCHOCO_01"]:
+		var c2 := Campaign.new(db, EconomyData.Difficulty.NORMAL, 7, rid, "CHAIN_A", "")
+		var s: Dictionary = c2.run(3)
+		if not s.has("total_profit") or c2.day_results.size() != 3:
+			all_run_ok = false
+	_check("all 4 products run a 3-day campaign", all_run_ok)

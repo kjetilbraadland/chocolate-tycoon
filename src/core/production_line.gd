@@ -10,12 +10,17 @@ var source_buffer: float = 0.0
 var finished_output: float = 0.0
 var raw_consumed_today: float = 0.0  # raw material pulled into the line
 var rng: RandomNumberGenerator
+# M2: enable the real per-machine temperature model (default off so the
+# regression baseline is preserved; the M2 slice / campaign opts in).
+var temperature_model_enabled: bool = false
 
 func _init(r: RandomNumberGenerator = null) -> void:
 	rng = r if r != null else RandomNumberGenerator.new()
 
 func add_machine(d: MachineData) -> void:
-	machines.append(MachineState.new(d, rng))
+	var m := MachineState.new(d, rng)
+	m.temperature_model_enabled = temperature_model_enabled
+	machines.append(m)
 
 func reset_day() -> void:
 	source_buffer = 0.0
@@ -74,3 +79,33 @@ func any_breakdown_today() -> bool:
 		if m.breakdowns_today > 0:
 			return true
 	return false
+
+# M2: bottleneck detection. Returns the machine that is the constraint:
+# the lowest-throughput machine (the line's natural bottleneck), plus the
+# machine that is most starved (upstream constraint) and most blocked
+# (downstream constraint). Useful for UX ("your wrapper is the bottleneck").
+func bottleneck_report() -> Dictionary:
+	var lowest: String = ""
+	var lowest_rate: float = INF
+	var most_starved: String = ""
+	var most_blocked: String = ""
+	var max_starved: float = 0.0
+	var max_blocked: float = 0.0
+	for m in machines:
+		if m.data.throughput_units_per_min < lowest_rate:
+			lowest_rate = m.data.throughput_units_per_min
+			lowest = m.data.machine_id
+		if m.starved_ticks_today > max_starved:
+			max_starved = m.starved_ticks_today
+			most_starved = m.data.machine_id
+		if m.blocked_ticks_today > max_blocked:
+			max_blocked = m.blocked_ticks_today
+			most_blocked = m.data.machine_id
+	return {
+		"lowest_throughput": lowest,
+		"lowest_rate": lowest_rate if is_finite(lowest_rate) else 0.0,
+		"most_starved": most_starved,
+		"most_starved_ticks": max_starved,
+		"most_blocked": most_blocked,
+		"most_blocked_ticks": max_blocked,
+	}

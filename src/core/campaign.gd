@@ -40,6 +40,11 @@ var transport_delay_multiplier: float = 1.0
 # daily results
 var day_results: Array = []
 
+# M2: multi-product support. player_tier gates which recipes can be produced
+# (a recipe is unlocked if recipe.unlock_tier <= player_tier). select_product
+# switches the active recipe (and re-bounds the production target).
+var player_tier: int = 1
+
 func _init(db: BalanceDatabase, d: EconomyData.Difficulty, s: int,
 		r_id: String, c_id: String, p_id: String) -> void:
 	sim = Simulation.new(db, d, s)
@@ -49,6 +54,29 @@ func _init(db: BalanceDatabase, d: EconomyData.Difficulty, s: int,
 	sim.build_line(c_id)
 	footfall_base = db.get_economy_value("ECO_SHOP_FOOTFALL_BASE", d)
 	input_cost_base = db.get_economy_value("ECO_INPUT_COST_MULT", d)
+
+# M2: is this recipe unlocked at the current player tier?
+func is_recipe_unlocked(r_id: String) -> bool:
+	var r: RecipeData = sim.balance_db.get_recipe(r_id)
+	return r != null and r.unlock_tier <= player_tier
+
+# M2: switch the active product (only if unlocked). Returns true on success.
+func select_product(r_id: String) -> bool:
+	var r: RecipeData = sim.balance_db.get_recipe(r_id)
+	if r == null or r.unlock_tier > player_tier:
+		return false
+	recipe = r
+	daily_production_target = 0.0  # re-auto to the new recipe's demand base
+	return true
+
+# M2: list the recipe ids unlocked at the current tier.
+func unlocked_recipes() -> Array:
+	var out: Array = []
+	for rid in sim.balance_db.recipes.keys():
+		var rd: RecipeData = sim.balance_db.recipes[rid]
+		if rd.unlock_tier <= player_tier:
+			out.append(rid)
+	return out
 
 # Run a full campaign of `days` days (headless). Returns a summary Dictionary.
 func run(days: int, contract_pack_id: String = "") -> Dictionary:
