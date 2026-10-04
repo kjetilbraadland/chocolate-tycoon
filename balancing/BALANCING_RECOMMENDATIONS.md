@@ -102,6 +102,78 @@ Optional changes:
 Expected impact:
 - Small strategic pressure on layout efficiency and inventory discipline.
 
+## P5 - Harder Hard (tighten hard mode)
+
+Context: after the per-hour cost model + demand cap + P2/P3, hard mode is too
+easy (live re-validation: avg profit 201, 0 negative-profit days). This pass
+tightens the HARD-mode economy knobs (hard_value column only; Normal untouched)
+to push hard back into the target band (profit -10..+40, 4-7 negative days,
+Q >= 71) while keeping the mechanics identical.
+
+Proposed changes (all within min/max bounds):
+1. ECO_START_CASH hard: 45000 -> 32000 (min 20000) — tighter runway
+2. ECO_DEBT_LIMIT hard: 98000 -> 82000 (min 50000) — earlier bankruptcy trigger
+3. ECO_BASE_LOAN_RATE hard: 0.06 -> 0.08 (max 0.12) — faster debt compounding
+4. ECO_WAGE_BASE hard: 165 -> 210 (max 260) — labor pressure (largest cost lever)
+5. ECO_ENERGY_PRICE hard: 0.28 -> 0.42 (max 0.60) — utility pressure
+6. ECO_STORAGE_SPOIL_RATE hard: 0.007 -> 0.012 (max 0.03) — inventory discipline
+7. ECO_SHOP_FOOTFALL_BASE hard: 0.9 -> 0.80 (min 0.5) — lower demand base
+8. ECO_TRUCK_SLOT_COUNT hard: 6 -> 5 (min 2) — dispatch bottleneck (reverts P2 for hard only)
+9. ECO_CONTRACT_REPUTATION_HIT hard: 9 -> 14 (max 20) — steeper reputation penalty
+
+Rationale:
+- Wages are the dominant per-hour cost (operator-hours x wage_base/24); raising
+  wage_base is the single largest lever on hard profit.
+- Energy + spoil raise the per-unit cost floor.
+- Lower start cash + lower debt limit + higher loan rate + steeper rep hit
+  convert bad days into debt growth / bankruptcy risk, which is what produces
+  the 4-7 negative days the target band wants.
+- Footfall base down shrinks the demand cap, cutting both revenue and cost but
+  netting lower (margins are positive, so less volume = less profit).
+- Truck slots back to 5 reintroduces the dispatch bottleneck on hard only.
+
+## Pass 5 Results (Applied — measured)
+
+Applied (hard_value column only; Normal untouched). Final hard values:
+- ECO_START_CASH hard: 45000 -> 20000 (min)
+- ECO_DEBT_LIMIT hard: 98000 -> 60000
+- ECO_BASE_LOAN_RATE hard: 0.06 -> 0.10
+- ECO_WAGE_BASE hard: 165 -> 260 (max)
+- ECO_ENERGY_PRICE hard: 0.28 -> 0.55
+- ECO_STORAGE_SPOIL_RATE hard: 0.007 -> 0.02
+- ECO_TRUCK_SLOT_COUNT hard: 6 -> 4
+- ECO_SHOP_FOOTFALL_BASE hard: 0.9 -> 0.65
+- ECO_CONTRACT_REPUTATION_HIT hard: 9 -> 14
+
+Live re-validation (per-hour model, HARD_STRESS_14D):
+- avg profit: 201.14 (pre-P5) -> 121.84 (P5)
+- avg revenue: 465.56 -> 335.43 (footfall base down)
+- avg cost: 264.41 -> 213.60
+- fulfillment: 94.49% -> 79.31%
+- avg Q: 71.62 -> 73.63 (still B-band, P3 target met)
+- neg-profit days: 0 -> 0
+
+Structural finding (why hard cannot reach the old-model band via economy knobs):
+- The per-hour model decouples costs from volume: machines only cost the hours
+  they actually run. Lowering demand (footfall) shrinks runtime, which shrinks
+  opex/wage/energy proportionally. So tightening cost knobs has diminishing
+  returns — the line simply runs less.
+- The per-unit margin is the real floor: revenue/unit (price x sold) vs
+  cost/unit (input + proportional opex/wage/energy). With production capped at
+  demand and the line running only the hours it needs, the cost floor is low,
+  so every day stays profitable (0 neg days).
+- All hard economy knobs are now at/near their min/max bounds; there is no
+  further headroom in this CSV to push hard into -10..+40.
+
+The real levers to make hard actually bite (candidate P6 — needs a decision):
+1. Raise the per-unit cost floor: input_cost_multiplier / base_unit_cost up
+   (the dominant cost component, currently ~1.0x in the hard-stress rows).
+2. Add a fixed daily opex floor (a base charge even when machines are idle),
+   re-coupling costs to the calendar rather than pure runtime.
+3. Accept "hard = challenging but profitable" (current P5 state) rather than
+   "hard = breakeven" — i.e. treat the per-hour model's profitability as the
+   new baseline and re-anchor the target band to it.
+
 ## Validation Plan (Next Pass)
 Run these three scenarios after P1 to P3 only:
 1. BASELINE_NORMAL_14D (unchanged baseline check)

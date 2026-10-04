@@ -21,6 +21,10 @@ var daily_production_target: float = 0.0  # units to attempt per day (0 = auto: 
 # production is capped at demand (see start_day)
 var day_demand: float = 0.0
 
+# footfall base (ECO_SHOP_FOOTFALL_BASE): scales the demand event multiplier.
+# 1.0 on Normal (no-op), <1.0 on Hard tightens demand.
+var footfall_base: float = 1.0
+
 # scenario multipliers (from master_simulation_template.csv)
 var input_cost_multiplier: float = 1.0
 var energy_price_multiplier: float = 1.0
@@ -39,6 +43,7 @@ func _init(db: BalanceDatabase, d: EconomyData.Difficulty, s: int,
 	chain_id = c_id
 	rng = sim.rng
 	sim.build_line(c_id)
+	footfall_base = db.get_economy_value("ECO_SHOP_FOOTFALL_BASE", d)
 
 # Run a full campaign of `days` days (headless). Returns a summary Dictionary.
 func run(days: int, contract_pack_id: String = "") -> Dictionary:
@@ -92,7 +97,7 @@ func start_day() -> void:
 	if target <= 0.0:
 		target = recipe.shop_demand_base  # auto: produce to expected shop demand
 	day_demand = sim.shop.daily_demand(recipe.shop_demand_base, shop_price_index,
-		sim.brand_score, sim.category_reputation, footfall_event_multiplier)
+		sim.brand_score, sim.category_reputation, footfall_event_multiplier * footfall_base)
 	var feed: float = minf(target, day_demand)  # cap production at demand
 	sim.line.reset_day()
 	sim.line.source_buffer = feed
