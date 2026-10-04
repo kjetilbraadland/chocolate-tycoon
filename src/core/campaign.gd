@@ -18,6 +18,9 @@ var wage_policy: float = 1.0
 var shop_price_index: float = 1.0
 var daily_production_target: float = 0.0  # units to attempt per day (0 = auto: shop demand base)
 
+# production is capped at demand (see start_day)
+var day_demand: float = 0.0
+
 # scenario multipliers (from master_simulation_template.csv)
 var input_cost_multiplier: float = 1.0
 var energy_price_multiplier: float = 1.0
@@ -79,13 +82,20 @@ func run(days: int, contract_pack_id: String = "") -> Dictionary:
 		"bankrupt_day": bankrupt_day,
 	}
 
-# Begin a day: reset the line and feed raw material (bounded by the target).
+# Begin a day: reset the line and feed raw material.
+# Production is CAPPED AT DEMAND: feed = min(target, demand). We only ever
+# make what the shop (at the current price/brand/footfall) will actually buy,
+# so there is no excess finished-goods cost. The day's demand is stored for
+# the sell step so production and sales use the same figure.
 func start_day() -> void:
 	var target: float = daily_production_target
 	if target <= 0.0:
 		target = recipe.shop_demand_base  # auto: produce to expected shop demand
+	day_demand = sim.shop.daily_demand(recipe.shop_demand_base, shop_price_index,
+		sim.brand_score, sim.category_reputation, footfall_event_multiplier)
+	var feed: float = minf(target, day_demand)  # cap production at demand
 	sim.line.reset_day()
-	sim.line.source_buffer = target
+	sim.line.source_buffer = feed
 
 # Advance one in-game minute (1 tick). Drives the real machine loop.
 func tick() -> void:
@@ -101,10 +111,9 @@ func close_day() -> Dictionary:
 	var q: float = _compute_quality()
 	var grade: String = sim.scorer.grade_for(q)
 
-	# 4. SELL — shop channel (footfall event multiplier from scenario)
-	var demand: float = sim.shop.daily_demand(recipe.shop_demand_base, shop_price_index,
-		sim.brand_score, sim.category_reputation, footfall_event_multiplier)
-	var sold: float = sim.shop.sell(demand, finished)
+	# 4. SELL — shop channel. Demand was computed in start_day (same inputs),
+	# so reuse it: production was capped at this figure, so we sell what we made.
+	var sold: float = sim.shop.sell(day_demand, finished)
 	var unit_price: float = recipe.base_unit_price * shop_price_index
 	var shop_revenue: float = sold * unit_price
 
