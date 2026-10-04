@@ -4,6 +4,7 @@
 
 # Imported translations
 *.import
+*.translation
 
 # Mono
 .mono/
