@@ -24,6 +24,7 @@ func save(slot: String, sim: Simulation) -> bool:
 		"total_units_produced": sim.total_units_produced,
 		"total_revenue": sim.total_revenue,
 		"total_cost": sim.total_cost,
+		"machine_layout": GameState.machine_layout,
 		"saved_at": Time.get_unix_time_from_system(),
 	}
 	var f := FileAccess.open(_path(slot), FileAccess.WRITE)

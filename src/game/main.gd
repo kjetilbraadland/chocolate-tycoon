@@ -1,11 +1,17 @@
 extends Node
 ## M1 main scene: starts a live campaign and shows the isometric factory view.
+## If a save exists, restore it (run state + machine layout) before starting.
 
 func _ready() -> void:
 	if BalanceDB.is_ready():
 		# start a live run (normal, milk bar, full chain)
 		GameState.new_run(EconomyData.Difficulty.NORMAL, 1,
 			"RCP_MILK_BAR_01", "CHAIN_A", "CONTRACT_A")
+		# restore the last save if present (run state + machine layout)
+		var data: Dictionary = SaveSystem.load("slot1")
+		if not data.is_empty():
+			GameState.load_game(data)
+			print("[main] M1 restored from save: day %d" % int(data.get("day", 0)))
 		print("[main] M1 live run started (normal, milk bar, CHAIN_A)")
 	else:
 		push_error("[main] DATA LOAD FAILED — check data/ CSVs")
