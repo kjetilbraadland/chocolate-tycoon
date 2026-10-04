@@ -50,6 +50,7 @@ func _initialize() -> void:
 		_test_m2(db)
 		_test_m3(db)
 		_test_m4(db)
+		_test_m5(db)
 
 	if mode == "scenario" or mode == "all":
 		if scenario != "":
@@ -582,3 +583,76 @@ func _test_m4(db: BalanceDatabase) -> void:
 	_check("campaign farming lowers input cost multiplier",
 		camp2.farming.input_cost_multiplier() < 1.0,
 		"got %.3f" % camp2.farming.input_cost_multiplier())
+
+func _test_m5(db: BalanceDatabase) -> void:
+	print("\n[TEST] M5: diagnostics (bottleneck/quality UX) + pacing + §19 targets")
+
+	# --- Diagnostics: line classification + summary ---
+	var camp := Campaign.new(db, EconomyData.Difficulty.NORMAL, 7,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp.sim.build_line("CHAIN_A")
+	# a clean line (no starve/block/breakdown) -> all healthy, one bottleneck
+	var rep: Dictionary = Diagnostics.line_report(camp.sim.line)
+	_check("line report has a bottleneck id",
+		(rep.bottleneck as String) != "", "got '%s'" % rep.bottleneck)
+	_check("line report classifies every machine",
+		(rep.per_machine as Dictionary).size() == camp.sim.line.machines.size(),
+		"got %d of %d" % [(rep.per_machine as Dictionary).size(), camp.sim.line.machines.size()])
+	_check("line report has a summary",
+		(rep.summary as String).length() > 0)
+	# a starved machine is classified starved
+	var m0 = camp.sim.line.machines[0]
+	m0.starved_ticks_today = 500.0
+	var rep2: Dictionary = Diagnostics.line_report(camp.sim.line)
+	_check("starved machine classified STARVED",
+		(rep2.per_machine as Dictionary)[m0.data.machine_id] == Diagnostics.Status.STARVED)
+	# a breaking machine is classified BREAKING
+	m0.starved_ticks_today = 0.0
+	m0.breakdowns_today = 3
+	var rep3: Dictionary = Diagnostics.line_report(camp.sim.line)
+	_check("breaking machine classified BREAKING",
+		(rep3.per_machine as Dictionary)[m0.data.machine_id] == Diagnostics.Status.BREAKING)
+	# quality summary names the weakest component
+	var comps: Dictionary = {"T": 80.0, "P": 95.0, "C": 90.0, "F": 95.0, "S": 88.0, "W": 70.0, "Q": 85.0}
+	var qs: String = Diagnostics.quality_summary(comps)
+	_check("quality summary names weakest component (W)",
+		qs.contains("W") and qs.contains("70.0"), "got: %s" % qs)
+
+	# --- PacingReport.build: cash trajectory + break-even + neg-day clustering ---
+	var synthetic: Array = []
+	# day 0: cash 9000 (below start 10000, negative), day 1: cash 9500 (neg),
+	# day 2: cash 10500 (>= start -> break-even), day 3: cash 11000 (pos)
+	synthetic.append({"day": 0, "cash": 9000.0, "profit": -1000.0})
+	synthetic.append({"day": 1, "cash": 9500.0, "profit": -500.0})
+	synthetic.append({"day": 2, "cash": 10500.0, "profit": 1000.0})
+	synthetic.append({"day": 3, "cash": 11000.0, "profit": 500.0})
+	var pr: Dictionary = PacingReport.build(synthetic, 10000.0)
+	_check("pacing: 4 days", int(pr.days) == 4)
+	_check("pacing: min cash 9000", absf(pr.min_cash - 9000.0) < 1.0, "got %.0f" % pr.min_cash)
+	_check("pacing: break-even on day 2", int(pr.break_even_day) == 2, "got %d" % pr.break_even_day)
+	_check("pacing: 2 negative days", int(pr.neg_profit_days) == 2, "got %d" % pr.neg_profit_days)
+	_check("pacing: max negative run 2 (consecutive)", int(pr.max_negative_run) == 2, "got %d" % pr.max_negative_run)
+	_check("pacing: survived", bool(pr.survived))
+	_check("pacing: summary non-empty", (pr.summary as String).length() > 0)
+
+	# --- PacingReport.check_targets: §19 balance targets ---
+	var t1: Dictionary = PacingReport.check_targets(14, 2, 90.0, true, false)
+	_check("§19: contract fill 90% >= 85% met", bool(t1["contract_fill"].met))
+	_check("§19: stockout 2/14 = 14% < 20% met", bool(t1["stockout"].met))
+	_check("§19: all targets met", bool(t1.all_met))
+	var t2: Dictionary = PacingReport.check_targets(14, 5, 70.0, false, false)
+	_check("§19: contract fill 70% < 85% NOT met", not bool(t2["contract_fill"].met))
+	_check("§19: stockout 5/14 = 36% >= 20% NOT met", not bool(t2["stockout"].met))
+	_check("§19: not all met", not bool(t2.all_met))
+
+	# --- pacing_report() wired into a real campaign run ---
+	var camp3 := Campaign.new(db, EconomyData.Difficulty.NORMAL, 12345,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp3.run(14)
+	var pacing: Dictionary = camp3.pacing_report()
+	_check("pacing_report: 14 days", int(pacing.days) == 14)
+	_check("pacing_report: has targets block", pacing.has("targets"))
+	_check("pacing_report: has stockout_days", pacing.has("stockout_days"))
+	_check("pacing_report: start cash matches", absf(pacing.start_cash - camp3.sim.balance_db.get_economy_value("ECO_START_CASH", camp3.sim.diff)) < 1.0)
+	# a 14-day normal run should survive (positive profit)
+	_check("pacing_report: 14-day normal run survived", bool(pacing.survived))

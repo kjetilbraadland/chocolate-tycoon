@@ -215,6 +215,34 @@ func run(days: int, contract_pack_id: String = "") -> Dictionary:
 		"bankrupt_day": bankrupt_day,
 	}
 
+# M5: campaign pacing report + §19 balance-targets check.
+# Builds the pacing report from the per-day results and checks the GDD §19
+# targets (contract fill ≥85%, stockout <20% days, survival).
+func pacing_report() -> Dictionary:
+	var start_cash: float = sim.balance_db.get_economy_value("ECO_START_CASH", sim.diff)
+	var pacing: Dictionary = PacingReport.build(day_results, start_cash)
+	# stockout days = days the shop was short (sold < demand)
+	var stockout_days: int = 0
+	var contract_fill_sum: float = 0.0
+	var contract_days: int = 0
+	for r in day_results:
+		var rd: Dictionary = r
+		var demand: float = rd.get("day_demand", 0.0)
+		var sold: float = rd.get("sold", 0.0)
+		if demand > 0.0 and sold < demand - 0.5:
+			stockout_days += 1
+		var fulfill: float = rd.get("fulfillment_pct", 0.0)
+		if fulfill > 0.0:
+			contract_fill_sum += fulfill
+			contract_days += 1
+	var contract_fill: float = contract_fill_sum / float(maxi(contract_days, 1))
+	var survived: bool = bool(pacing.survived)
+	pacing["stockout_days"] = stockout_days
+	pacing["targets"] = PacingReport.check_targets(
+		int(pacing.days), stockout_days, contract_fill, survived,
+		sim.diff == EconomyData.Difficulty.HARD)
+	return pacing
+
 # Begin a day: reset the line and feed raw material.
 # Production is CAPPED AT DEMAND: feed = min(target, demand). We only ever
 # make what the shop (at the current price/brand/footfall) will actually buy,
@@ -320,6 +348,8 @@ func close_day() -> Dictionary:
 		"grade": grade,
 		"quality_components": _quality_components(),
 		"sold": sold,
+		"day_demand": day_demand,
+		"fulfillment_pct": (minf(sold, day_demand) / day_demand * 100.0) if day_demand > 0.0 else 0.0,
 		"shop_revenue": shop_revenue,
 		"cost": cost,
 		"profit": sim.economy.last_profit,
