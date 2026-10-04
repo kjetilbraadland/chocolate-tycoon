@@ -25,6 +25,10 @@ var day_demand: float = 0.0
 # 1.0 on Normal (no-op), <1.0 on Hard tightens demand.
 var footfall_base: float = 1.0
 
+# input cost base (ECO_INPUT_COST_MULT): per-difficulty raw material cost scale.
+# 1.0 on Normal, >1.0 on Hard raises the per-unit cost floor (P6 lever #1).
+var input_cost_base: float = 1.0
+
 # scenario multipliers (from master_simulation_template.csv)
 var input_cost_multiplier: float = 1.0
 var energy_price_multiplier: float = 1.0
@@ -44,6 +48,7 @@ func _init(db: BalanceDatabase, d: EconomyData.Difficulty, s: int,
 	rng = sim.rng
 	sim.build_line(c_id)
 	footfall_base = db.get_economy_value("ECO_SHOP_FOOTFALL_BASE", d)
+	input_cost_base = db.get_economy_value("ECO_INPUT_COST_MULT", d)
 
 # Run a full campaign of `days` days (headless). Returns a summary Dictionary.
 func run(days: int, contract_pack_id: String = "") -> Dictionary:
@@ -154,7 +159,7 @@ func close_day() -> Dictionary:
 		energy += sim.economy.energy_cost(m.data.power_kw, hours) * energy_price_multiplier
 		operator_hours += hours  # one operator per machine, charged per active hour
 	var wage_cost: float = sim.economy.wage_cost_hours(operator_hours, wage_policy)
-	var input_cost: float = sim.line.raw_consumed_today * recipe.base_unit_cost * input_cost_multiplier
+	var input_cost: float = sim.line.raw_consumed_today * recipe.base_unit_cost * input_cost_multiplier * input_cost_base
 	# storage decay (spoilage) on finished goods
 	var spoilage: float = sim.economy.spoilage(finished) * storage_decay_multiplier
 	var cost: float = wage_cost + opex + energy + input_cost + spoilage

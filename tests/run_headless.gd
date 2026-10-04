@@ -309,9 +309,9 @@ func _test_scenario(db: BalanceDatabase, scenario_id: String) -> void:
 	# --- Part 2: balancing targets (informational) ---
 	var is_hard: bool = scenario_id.contains("HARD")
 	if is_hard:
-		_report_target("hard avg_profit in [-10,40]", avg_profit >= -10.0 and avg_profit <= 40.0, "got %.2f" % avg_profit)
+		_report_target("hard avg_profit in [40,120] (P6 band)", avg_profit >= 40.0 and avg_profit <= 120.0, "got %.2f" % avg_profit)
 		_report_target("hard avg_Q >= 71 (P3 target)", avg_q >= 71.0, "got %.2f" % avg_q)
-		_report_target("hard neg_profit_days in [4,7]", neg_profit_days >= 4 and neg_profit_days <= 7, "got %d" % neg_profit_days)
+		_report_target("hard neg_profit_days in [0,3] (P6 band)", neg_profit_days >= 0 and neg_profit_days <= 3, "got %d" % neg_profit_days)
 	else:
 		_report_target("normal avg_profit > 120", avg_profit > 120.0, "got %.2f" % avg_profit)
 		_report_target("normal avg_fulfillment > 90%", avg_fulfillment > 90.0, "got %.2f%%" % avg_fulfillment)
@@ -359,16 +359,16 @@ func _revalidate(db: BalanceDatabase) -> void:
 				sr.get("avg_daily_profit", "0").to_float(),
 				sr.get("avg_quality_Q", "0").to_float(),
 				sr.get("avg_contract_fulfillment_pct", "0").to_float()])
-		# pass criteria (informational)
+		# pass criteria (informational) — re-anchored to the per-hour model (P6)
 		var is_hard: bool = sid.contains("HARD")
 		if is_hard:
-			_report_target("hard avg_profit in [-10,40]",
-				rollup.avg_daily_profit >= -10.0 and rollup.avg_daily_profit <= 40.0,
+			_report_target("hard avg_profit in [40,120] (P6 band)",
+				rollup.avg_daily_profit >= 40.0 and rollup.avg_daily_profit <= 120.0,
 				"got %.2f" % rollup.avg_daily_profit)
 			_report_target("hard avg_Q >= 71", rollup.avg_quality_Q >= 71.0,
 				"got %.2f" % rollup.avg_quality_Q)
-			_report_target("hard neg_profit_days in [4,7]",
-				rollup.neg_profit_days >= 4 and rollup.neg_profit_days <= 7,
+			_report_target("hard neg_profit_days in [0,3] (P6 band)",
+				rollup.neg_profit_days >= 0 and rollup.neg_profit_days <= 3,
 				"got %d" % rollup.neg_profit_days)
 		else:
 			_report_target("normal avg_profit > 120", rollup.avg_daily_profit > 120.0,

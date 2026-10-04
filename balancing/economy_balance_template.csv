@@ -5,6 +5,7 @@ ECO_BASE_LOAN_RATE,finance,0.045,0.10,0.01,0.12,rate,all,daily_interest_calc,Flo
 ECO_WAGE_BASE,labor,140,260,80,260,currency_per_worker_per_day,all,wage_cost_calc,Higher hard-mode pressure
 ECO_WAGE_QUALITY_MULT,labor,0.12,0.11,0.02,0.2,coefficient,quality,W_component_scale,Scales wage effect on quality
 ECO_ENERGY_PRICE,utilities,0.22,0.55,0.08,0.6,currency_per_kwh,all,power_cost_calc,Daily market fluctuations optional
+ECO_INPUT_COST_MULT,inputs,1.0,1.3,0.5,2.0,multiplier,all,input_cost_calc,Scales raw material cost per difficulty
 ECO_STORAGE_SPOIL_RATE,logistics,0.004,0.02,0,0.03,rate_per_day,perishables,freshness_decay,Impacts shelf-life products
 ECO_TRUCK_SLOT_COUNT,logistics,6,4,2,12,slots_per_day,contracts,dispatch_capacity,Core bottleneck lever
 ECO_CONTRACT_PENALTY_RATE,contracts,0.18,0.22,0.05,0.6,rate,contracts,penalty_amount,Applied on misses

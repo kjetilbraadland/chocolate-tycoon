@@ -174,6 +174,32 @@ The real levers to make hard actually bite (candidate P6 — needs a decision):
    "hard = breakeven" — i.e. treat the per-hour model's profitability as the
    new baseline and re-anchor the target band to it.
 
+## Pass 6 Results (Applied — user: "a little harder, not impossible")
+
+Decision: lever #1 (modest hard-only per-unit cost increase) + lever #3
+(re-anchor the target band to the per-hour model's profitability). No fixed
+opex floor (would distort the runtime-coupled cost structure the user asked for).
+
+Change:
+- New knob ECO_INPUT_COST_MULT (normal 1.0, hard 1.3, bounds 0.5..2.0) —
+  scales raw material cost per difficulty. Wired into Campaign.close_day().
+- Hard 1.3x input cost raises the per-unit cost floor directly.
+
+Live re-validation (per-hour model):
+- Hard avg profit: 121.84 (P5) -> 74.23 (P6)
+- Hard revenue 335.43, cost 261.20, fulfillment 79.31%, Q 73.63 (B-band)
+- Hard neg-profit days: 0
+- Normal unchanged: 246.09 (lever is hard-only)
+
+Result: hard is now a meaningful step below normal (74 vs 246, ~30% of
+normal's profit) but clearly profitable — "a little harder, not impossible."
+
+Re-anchored target band (per-hour model; replaces the obsolete old-model
+-10..+40 / 4-7 neg days band):
+- Hard: avg profit in [40, 120] (clearly below normal, still profitable),
+  neg-profit days in [0, 3] (a few rough days, not constant losses), Q >= 71.
+- Normal: avg profit > 120, fulfillment > 90%, Q B-band (unchanged).
+
 ## Validation Plan (Next Pass)
 Run these three scenarios after P1 to P3 only:
 1. BASELINE_NORMAL_14D (unchanged baseline check)
