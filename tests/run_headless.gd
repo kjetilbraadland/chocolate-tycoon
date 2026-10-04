@@ -656,3 +656,55 @@ func _test_m5(db: BalanceDatabase) -> void:
 	_check("pacing_report: start cash matches", absf(pacing.start_cash - camp3.sim.balance_db.get_economy_value("ECO_START_CASH", camp3.sim.diff)) < 1.0)
 	# a 14-day normal run should survive (positive profit)
 	_check("pacing_report: 14-day normal run survived", bool(pacing.survived))
+
+	# --- M5 HUD layer: build headlessly, wire a campaign, assert rendered text ---
+	_test_m5_hud(db)
+
+func _test_m5_hud(db: BalanceDatabase) -> void:
+	print("\n[TEST] M5 HUD: build + update + rendered text")
+	# the GameState autoload (the HUD reads GameState.campaign)
+	var gs: Node = root.get_node("GameState")
+	if gs == null:
+		_check("GameState autoload present", false, "root.get_node('GameState') == null")
+		return
+	# build a campaign and drive a few days so the HUD has data
+	var camp := Campaign.new(db, EconomyData.Difficulty.NORMAL, 7,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp.run(3)
+	gs.campaign = camp
+	gs.running = false
+	# build the HUD, add to the scene tree, force an update
+	var hud: CanvasLayer = load("res://src/game/hud_view.gd").new()
+	root.add_child(hud)
+	hud._update()
+	# top bar should show the day + cash
+	var top_text: String = hud._top_bar.text
+	_check("HUD top bar shows day", top_text.contains("Day"), "got: %s" % top_text)
+	_check("HUD top bar shows cash", top_text.contains("Cash"), "got: %s" % top_text)
+	# bottleneck section: a real line always has a natural bottleneck
+	var b_summary: String = hud._labels["b_summary"].text
+	_check("HUD bottleneck summary non-empty", b_summary.length() > 0, "got: %s" % b_summary)
+	var b_bottleneck: String = hud._labels["b_bottleneck"].text
+	_check("HUD names the natural bottleneck", b_bottleneck.contains("bottleneck"), "got: %s" % b_bottleneck)
+	# quality section: names a weakest component + shows grade
+	var q_summary: String = hud._labels["q_summary"].text
+	_check("HUD quality summary names weakest component", q_summary.contains("weakest"), "got: %s" % q_summary)
+	var q_grade: String = hud._labels["q_grade"].text
+	_check("HUD shows grade", q_grade.contains("Grade"), "got: %s" % q_grade)
+	# quality bars: all six components present and in 0..100
+	var all_bars_ok: bool = true
+	for k in ["T", "P", "C", "F", "S", "W"]:
+		if not hud._bars.has(k):
+			all_bars_ok = false
+		elif hud._bars[k].value < 0.0 or hud._bars[k].value > 100.0:
+			all_bars_ok = false
+	_check("HUD has all 6 quality bars in range", all_bars_ok)
+	# pacing section
+	var p_summary: String = hud._labels["p_summary"].text
+	_check("HUD pacing summary non-empty", p_summary.length() > 0, "got: %s" % p_summary)
+	# toggle panel
+	var was_open: bool = hud._panel_open
+	hud.toggle_panel()
+	_check("HUD toggle_panel flips state", hud._panel_open != was_open)
+	hud.toggle_panel()
+	root.remove_child(hud)

@@ -1,6 +1,9 @@
 extends Node
 ## M1 main scene: starts a live campaign and shows the isometric factory view.
 ## If a save exists, restore it (run state + machine layout) before starting.
+## M5: also adds the HUD layer (bottleneck / quality / pacing panels).
+
+var _hud: CanvasLayer = null
 
 func _ready() -> void:
 	if BalanceDB.is_ready():
@@ -18,3 +21,7 @@ func _ready() -> void:
 	# add the isometric factory view (HUD + camera live in there)
 	var view: Node2D = load("res://src/game/factory_view.gd").new()
 	add_child(view)
+	# add the M5 HUD layer (bottleneck / quality / pacing panels)
+	var hud: CanvasLayer = load("res://src/game/hud_view.gd").new()
+	add_child(hud)
+	_hud = hud
