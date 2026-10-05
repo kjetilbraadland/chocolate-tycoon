@@ -58,6 +58,21 @@ var rnd_breakout_days: int = 0  # remaining days of a breakout footfall spike
 # M4: progression (unlock tree) + farming side-map.
 var progression: Progression
 var farming: FarmingSystem
+# M6: Factorio-style belt + inserter routing. belt_mode = true routes flow
+# through the belt network (belt capacity + inserter rate become real
+# constraints). Default false = legacy direct buffer flow (regression baseline).
+var belt_mode: bool = false
+var belt_capacity: float = 150.0
+var belt_throughput: float = 20.0
+var inserter_rate: float = 20.0
+
+# M6: enable / disable belt routing on the live line.
+func set_belts(enabled: bool) -> void:
+	belt_mode = enabled
+	if enabled:
+		sim.line.enable_belts(belt_capacity, belt_throughput, inserter_rate)
+	else:
+		sim.line.disable_belts()
 
 func _init(db: BalanceDatabase, d: EconomyData.Difficulty, s: int,
 		r_id: String, c_id: String, p_id: String) -> void:

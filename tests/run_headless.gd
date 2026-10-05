@@ -672,6 +672,9 @@ func _test_m5(db: BalanceDatabase) -> void:
 	# --- M5 title / start screen ---
 	_test_m5_title(db)
 
+	# --- M6 Factorio-style belt + inserter routing ---
+	_test_m6_belts(db)
+
 func _test_m5_hud(db: BalanceDatabase) -> void:
 	print("\n[TEST] M5 HUD: build + update + rendered text")
 	# the GameState autoload (the HUD reads GameState.campaign)
@@ -892,3 +895,65 @@ func _test_m5_title(db: BalanceDatabase) -> void:
 	# tree + BalanceDB autoload, so it's verified in-game, not headlessly)
 	title.hide_screen()
 	_check("title: hide_screen hides the title screen", not title.is_shown())
+
+func _test_m6_belts(db: BalanceDatabase) -> void:
+	print("\n[TEST] M6 Factorio-style belt + inserter routing")
+	# 1. Belt network builds the right topology (N machines -> N+1 belts,
+	#    input + output inserters per machine).
+	var bn := BeltNetwork.new()
+	bn.build_default(7, 150.0, 20.0, 20.0)
+	_check("belts: 7 machines -> 8 belts", bn.belts.size() == 8,
+		"got %d" % bn.belts.size())
+	_check("belts: 14 inserters (7 in + 7 out)", bn.inserters.size() == 14,
+		"got %d" % bn.inserters.size())
+	_check("belts: belt 0 is raw", bn.belts[0].kind == "raw")
+	_check("belts: belt 7 is finished", bn.belts[7].kind == "finished")
+	_check("belts: finished belt has large capacity", bn.belts[7].capacity >= 100000.0)
+
+	# 2. A full line with belts enabled produces finished goods.
+	var camp := Campaign.new(db, EconomyData.Difficulty.NORMAL, 7,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp.set_belts(true)
+	_check("belts: campaign belt_mode enabled", camp.belt_mode)
+	camp.run(1)
+	_check("belts: 1-day run produced finished goods",
+		camp.sim.line.finished_output > 0.0,
+		"finished_output=%f" % camp.sim.line.finished_output)
+
+	# 3. A slow belt (slower than the bottleneck machine) constrains output.
+	# Test in isolation with a large source (the campaign's demand cap keeps
+	# production too low for the belt to ever be the bottleneck).
+	var line_fast := ProductionLine.new()
+	var line_slow := ProductionLine.new()
+	var chain: Array = db.lookup.chain_machine_ids("CHAIN_A")
+	for mid in chain:
+		line_fast.add_machine(db.get_machine(mid))
+		line_slow.add_machine(db.get_machine(mid))
+	line_fast.enable_belts(150.0, 20.0, 20.0)  # fast belt
+	line_slow.enable_belts(150.0, 1.0, 1.0)  # slow belt (the constraint)
+	line_fast.source_buffer = 100000.0
+	line_slow.source_buffer = 100000.0
+	for i in 200:
+		line_fast.tick(true)
+	for i in 200:
+		line_slow.tick(true)
+	var fast_out: float = line_fast.finished_output
+	var slow_out: float = line_slow.finished_output
+	_check("belts: slow belt produces less than fast belt (isolated)",
+		slow_out < fast_out, "fast=%f slow=%f" % [fast_out, slow_out])
+
+	# 4. Belt-off (legacy) run produces finished goods.
+	var camp_legacy := Campaign.new(db, EconomyData.Difficulty.NORMAL, 7,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp_legacy.run(1)
+	var legacy_out: float = camp_legacy.sim.line.finished_output
+	_check("belts: legacy (belt-off) run produces finished goods",
+		legacy_out > 0.0, "legacy=%f" % legacy_out)
+
+	# 5. Bottleneck belt diagnostic returns a valid belt.
+	var bn2 := BeltNetwork.new()
+	bn2.build_default(7, 150.0, 20.0, 20.0)
+	bn2.load_source(1000.0)
+	var bb: Dictionary = bn2.bottleneck_belt()
+	_check("belts: bottleneck_belt returns a belt id >= 0",
+		int(bb.belt_id) >= 0, "got %s" % str(bb.belt_id))

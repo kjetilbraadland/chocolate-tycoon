@@ -13,6 +13,23 @@ var rng: RandomNumberGenerator
 # M2: enable the real per-machine temperature model (default off so the
 # regression baseline is preserved; the M2 slice / campaign opts in).
 var temperature_model_enabled: bool = false
+# M6: Factorio-style belt + inserter routing. Default off (legacy direct
+# buffer flow, so the regression baseline is preserved). When enabled, flow
+# routes through the belt network and belt capacity / inserter rate become
+# real constraints.
+var belt_network: BeltNetwork = null
+var belt_enabled: bool = false
+
+# M6: build + enable the default belt network for this chain.
+func enable_belts(belt_capacity: float, belt_throughput: float,
+		inserter_rate: float) -> void:
+	belt_network = BeltNetwork.new()
+	belt_network.build_default(machines.size(), belt_capacity,
+		belt_throughput, inserter_rate)
+	belt_enabled = true
+
+func disable_belts() -> void:
+	belt_enabled = false
 
 func _init(r: RandomNumberGenerator = null) -> void:
 	rng = r if r != null else RandomNumberGenerator.new()
@@ -26,11 +43,37 @@ func reset_day() -> void:
 	source_buffer = 0.0
 	finished_output = 0.0
 	raw_consumed_today = 0.0
+	if belt_network != null:
+		belt_network.reset_day()
 	for m in machines:
 		m.reset_day()
 
 # Advance one tick. Returns units of finished goods produced this tick.
 func tick(temp_in_window: bool) -> float:
+	# M6: belt + inserter routing (when enabled). Flow goes through the belt
+	# network: raw material loads onto belt 0, input inserters feed each
+	# machine, machines run (input -> output), output inserters push onto the
+	# next belt, and the finished-goods belt holds the result. Belt capacity
+	# + inserter rate are real constraints (a slow belt blocks upstream and
+	# starves downstream).
+	if belt_enabled and belt_network != null:
+		# draw raw material from the source reservoir onto belt 0 (up to the
+		# belt's remaining capacity) — the reservoir is the day's raw supply,
+		# so a slow raw belt starves the line (a real constraint).
+		var raw_space: float = belt_network.belts[0].capacity \
+			- belt_network.belts[0].held if belt_network.belts.size() > 0 else 0.0
+		var drawn: float = minf(source_buffer, raw_space)
+		belt_network.belts[0].held += drawn
+		source_buffer -= drawn
+		belt_network.feed_inputs(machines)
+		for m in machines:
+			m.tick(temp_in_window)
+		belt_network.collect_outputs(machines)
+		raw_consumed_today = machines[0].units_consumed_today if machines.size() > 0 else 0.0
+		finished_output += belt_network.finished_held()
+		belt_network.reset_finished()
+		return 0.0
+	# Legacy direct buffer flow (default; preserves the regression baseline).
 	# Pass 1: flow upstream to downstream — feed each machine's input from the
 	# previous machine's output buffer (or the source buffer for stage 1).
 	for i in range(machines.size()):
