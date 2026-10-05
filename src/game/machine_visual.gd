@@ -145,3 +145,32 @@ static func _generic_detail(c: Vector2) -> PackedVector2Array:
 	var t: Vector2 = c + Vector2(0, -16 - 26)
 	return PackedVector2Array([
 		t + Vector2(-12, 0), t + Vector2(12, 0), t + Vector2(12, 12), t + Vector2(-12, 12)])
+
+# --- M5 polish: shading, shadow, glow and steam helpers ---
+
+# Three isometric face tints for a base block: top (light), left (mid), right (dark).
+static func face_shades(base: Color) -> Dictionary:
+	return {
+		"top": base.lightened(0.22),
+		"left": base,
+		"right": base.darkened(0.30),
+	}
+
+# Soft drop shadow: flat diamond under the machine (slightly smaller than a tile).
+static func shadow(c: Vector2) -> PackedVector2Array:
+	return PackedVector2Array([
+		c + Vector2(0, -13), c + Vector2(26, 0), c + Vector2(0, 13), c + Vector2(-26, 0)])
+
+# Warm glow ring (same footprint as the shadow; alpha is animated in the view).
+static func glow(c: Vector2) -> PackedVector2Array:
+	return shadow(c)
+
+# Where steam particles emit for a machine type (world offset from tile center).
+static func steam_origin(type: String, c: Vector2) -> Vector2:
+	match type:
+		"roasting":
+			return c + Vector2(14, -74)  # top of the chimney
+		"conching":
+			return c + Vector2(0, -54)  # top of the tank lid
+		_:
+			return c + Vector2(0, -60)

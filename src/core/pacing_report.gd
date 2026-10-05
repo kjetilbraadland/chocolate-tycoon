@@ -14,7 +14,22 @@ extends RefCounted
 static func build(day_results: Array, start_cash: float) -> Dictionary:
 	var n: int = day_results.size()
 	if n == 0:
-		return { "days": 0 }
+		# No days run yet: return the full key set with neutral defaults so
+		# callers (campaign.gd, hud_view.gd) can read every field safely.
+		return {
+			"days": 0,
+			"start_cash": start_cash,
+			"end_cash": start_cash,
+			"min_cash": start_cash,
+			"min_cash_day": -1,
+			"break_even_day": -1,
+			"total_profit": 0.0,
+			"neg_profit_days": 0,
+			"neg_days": [],
+			"max_negative_run": 0,
+			"survived": true,
+			"summary": "no days run yet",
+		}
 	var end_cash: float = float((day_results[n - 1] as Dictionary).cash)
 	var min_cash: float = INF
 	var min_cash_day: int = -1

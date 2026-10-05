@@ -78,15 +78,21 @@ func _tile_polygon(center: Vector2) -> PackedVector2Array:
 		center + Vector2(0, TILE_H / 2.0),
 		center + Vector2(-TILE_W / 2.0, 0)])
 
-func _machine_block_polygon(center: Vector2) -> PackedVector2Array:
+# The base block hexagon split into three isometric faces: top, left, right.
+func _block_faces(center: Vector2) -> Array:
 	var h: float = 26.0
-	return PackedVector2Array([
-		center + Vector2(0, -TILE_H / 2.0 - h),
-		center + Vector2(TILE_W / 2.0 - 8.0, -TILE_H / 4.0 - h),
-		center + Vector2(TILE_W / 2.0 - 8.0, -TILE_H / 4.0),
-		center + Vector2(0, 0),
-		center + Vector2(-TILE_W / 2.0 + 8.0, -TILE_H / 4.0),
-		center + Vector2(-TILE_W / 2.0 + 8.0, -TILE_H / 4.0 - h)])
+	var t: Vector2 = center + Vector2(0, -TILE_H / 2.0 - h)
+	var tr: Vector2 = center + Vector2(TILE_W / 2.0 - 8.0, -TILE_H / 4.0 - h)
+	var br: Vector2 = center + Vector2(TILE_W / 2.0 - 8.0, -TILE_H / 4.0)
+	var b: Vector2 = center
+	var bl: Vector2 = center + Vector2(-(TILE_W / 2.0 - 8.0), -TILE_H / 4.0)
+	var tl: Vector2 = center + Vector2(-(TILE_W / 2.0 - 8.0), -TILE_H / 4.0 - h)
+	var c: Vector2 = center + Vector2(0, -TILE_H / 4.0)
+	return [
+		PackedVector2Array([t, tr, c, tl]),  # top
+		PackedVector2Array([tl, bl, b, c]),  # left
+		PackedVector2Array([tr, br, b, c]),  # right
+	]
 
 func _build_grid() -> void:
 	# ground
@@ -118,8 +124,18 @@ func _build_machines() -> void:
 		_machine_layout[mid] = Vector2i(i, 0)
 		var tile := Polygon2D.new()
 		tile.color = COL_TILE_GRID
-		var block := Polygon2D.new()
-		block.color = COL_MACH
+		# M5 polish: drop shadow + warm glow ring under the machine
+		var shadow := Polygon2D.new()
+		shadow.color = Color(0.0, 0.0, 0.0, 0.28)
+		var glow := Polygon2D.new()
+		glow.color = Color(1.0, 0.82, 0.45, 0.0)
+		# three shaded faces instead of one flat block
+		var faces: Array = []
+		var shades: Dictionary = MachineVisual.face_shades(COL_MACH)
+		for key in ["top", "left", "right"]:
+			var f := Polygon2D.new()
+			f.color = shades[key]
+			faces.append(f)
 		var label := Label.new()
 		label.text = md.machine_name
 		label.add_theme_font_size_override("font_size", 12)
@@ -127,7 +143,10 @@ func _build_machines() -> void:
 		label.custom_minimum_size = Vector2(120, 0)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		add_child(tile)
-		add_child(block)
+		add_child(shadow)
+		add_child(glow)
+		for f in faces:
+			add_child(f)
 		add_child(label)
 		# M5: procedural machine visual (type-specific details on top of the base)
 		var details: Array = []
@@ -139,15 +158,42 @@ func _build_machines() -> void:
 			p.color = v.color
 			add_child(p)
 			details.append(p)
-		_machine_nodes[mid] = { "block": block, "label": label, "tile": tile, "details": details }
+		# steam particles for machines that produce steam
+		var particles: Array = []
+		if md.stage == "roasting" or md.stage == "conching":
+			var p := CPUParticles2D.new()
+			p.amount = 10
+			p.lifetime = 1.6
+			p.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+			p.emission_sphere_radius = 4.0
+			p.direction = Vector2(0, -1)
+			p.initial_velocity_min = 10.0
+			p.initial_velocity_max = 22.0
+			p.gravity = Vector2(0, -6)
+			p.scale_amount_min = 0.3
+			p.scale_amount_max = 0.8
+			p.color = Color(0.92, 0.90, 0.87, 0.45)
+			p.visible = false
+			add_child(p)
+			particles.append(p)
+		_machine_nodes[mid] = {
+			"faces": faces, "label": label, "tile": tile, "details": details,
+			"shadow": shadow, "glow": glow, "particles": particles}
 		_place_machine(mid)
 
 func _place_machine(mid: String) -> void:
 	var node: Dictionary = _machine_nodes[mid]
 	var pos: Vector2 = _iso(_machine_layout[mid].x, _machine_layout[mid].y)
 	(node.tile as Polygon2D).polygon = _tile_polygon(pos)
-	(node.block as Polygon2D).polygon = _machine_block_polygon(pos)
+	# three shaded faces of the block
+	var face_polys: Array = _block_faces(pos)
+	var faces: Array = node.faces
+	for i in range(faces.size()):
+		(faces[i] as Polygon2D).polygon = face_polys[i]
 	(node.label as Label).position = pos + Vector2(-60, 12)
+	# drop shadow + warm glow ring under the machine
+	(node.shadow as Polygon2D).polygon = MachineVisual.shadow(pos)
+	(node.glow as Polygon2D).polygon = MachineVisual.glow(pos)
 	# reposition the type-specific detail polygons onto this tile
 	var vis: Array = MachineVisual.build(_machine_stage(mid), pos)
 	var details: Array = node.details
@@ -158,6 +204,10 @@ func _place_machine(mid: String) -> void:
 		if di < details.size():
 			(details[di] as Polygon2D).polygon = v.polygon
 		di += 1
+	# reposition the steam emitters
+	var particles: Array = node.particles
+	for p in particles:
+		(p as CPUParticles2D).position = MachineVisual.steam_origin(_machine_stage(mid), pos)
 
 # M6: build the belt + inserter visual layer. One strip per belt (raw /
 # semi / finished), positioned between the machine tiles (so they follow
@@ -400,19 +450,48 @@ func _process(_delta: float) -> void:
 	var cam := GameState.campaign
 	if cam == null:
 		return
-	# update machine block colors by state
+	# update machine face colors + glow/steam by state
+	var t: float = Time.get_ticks_msec() / 1000.0
+	var pulse: float = 0.5 + 0.5 * sin(t * 4.0)
 	for mid in _machine_nodes.keys():
 		var idx: int = _chain_index(mid)
-		if idx >= 0 and idx < cam.sim.line.machines.size():
-			var m: MachineState = cam.sim.line.machines[idx]
-			var block: Polygon2D = _machine_nodes[mid].block
-			match m.state:
-				MachineState.State.RUNNING:
-					block.color = COL_MACH_RUN
-				MachineState.State.BREAKDOWN, MachineState.State.REPAIRING:
-					block.color = COL_MACH_STOP
-				_:
-					block.color = COL_MACH
+		if idx < 0 or idx >= cam.sim.line.machines.size():
+			continue
+		var m: MachineState = cam.sim.line.machines[idx]
+		var node: Dictionary = _machine_nodes[mid]
+		var faces: Array = node.faces
+		var base_col: Color
+		var running: bool = false
+		var broken: bool = false
+		match m.state:
+			MachineState.State.RUNNING:
+				base_col = COL_MACH_RUN
+				running = true
+			MachineState.State.BREAKDOWN, MachineState.State.REPAIRING:
+				base_col = COL_MACH_STOP
+				broken = true
+			_:
+				base_col = COL_MACH
+		var shades: Dictionary = MachineVisual.face_shades(base_col)
+		var keys: Array = ["top", "left", "right"]
+		for i in range(faces.size()):
+			var f: Polygon2D = faces[i]
+			var col: Color = shades[keys[i]]
+			if running:
+				# gentle breathing glow while running
+				col = col.lerp(base_col.lightened(0.25), pulse * 0.35)
+			elif broken:
+				# red flash while broken
+				col = col.lerp(Color(0.9, 0.3, 0.25), pulse * 0.4)
+			f.color = col
+		# warm glow ring under running machines
+		var glow: Polygon2D = node.glow
+		glow.color = Color(1.0, 0.82, 0.45, 0.10 + 0.12 * pulse) if running \
+			else Color(1.0, 0.82, 0.45, 0.0)
+		# steam only while running
+		var particles: Array = node.particles
+		for p in particles:
+			(p as CPUParticles2D).visible = running
 	# HUD
 	var top: Label = _hud.get_node("TopBar")
 	var status: Label = _hud.get_node("StatusLine")
