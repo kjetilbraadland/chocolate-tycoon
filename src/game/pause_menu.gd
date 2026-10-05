@@ -77,12 +77,12 @@ func _build_buttons() -> void:
 	title.add_theme_color_override("font_color", ACCENT)
 	_panel.add_child(title)
 	y += 50
-	_buttons["resume"] = _button(y, "Resume"); y += 40
-	_buttons["save"] = _button(y, "Save game"); y += 40
-	_buttons["load"] = _button(y, "Load game"); y += 40
-	_buttons["options"] = _button(y, "Options"); y += 40
-	_buttons["keys"] = _button(y, "Keybindings"); y += 40
-	_buttons["exit"] = _button(y, "Exit"); y += 50
+	_buttons["resume"] = _button(y, "Resume"); _buttons["resume"].pressed.connect(action_resume); y += 40
+	_buttons["save"] = _button(y, "Save game"); _buttons["save"].pressed.connect(action_save); y += 40
+	_buttons["load"] = _button(y, "Load game"); _buttons["load"].pressed.connect(action_load); y += 40
+	_buttons["options"] = _button(y, "Options"); _buttons["options"].pressed.connect(action_options); y += 40
+	_buttons["keys"] = _button(y, "Keybindings"); _buttons["keys"].pressed.connect(action_keys); y += 40
+	_buttons["exit"] = _button(y, "Exit"); _buttons["exit"].pressed.connect(action_exit); y += 50
 	_status = Label.new()
 	_status.position = Vector2(20, y)
 	_status.custom_minimum_size = Vector2(360, 0)

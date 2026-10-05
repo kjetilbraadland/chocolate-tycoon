@@ -735,6 +735,12 @@ func _test_m5_mgmt(db: BalanceDatabase) -> void:
 	var mgmt: CanvasLayer = load("res://src/game/management_view.gd").new()
 	root.add_child(mgmt)
 	mgmt._update()
+	# regression guard: every button must have its `pressed` signal wired
+	var wired: bool = true
+	for k in mgmt._buttons:
+		if (mgmt._buttons[k] as Button).get_signal_connection_list("pressed").is_empty():
+			wired = false
+	_check("mgmt: all buttons have wired pressed signals", wired)
 	# unlock tree section
 	_check("mgmt: stages rendered", mgmt._labels["stages"].text.length() > 0,
 		"got: %s" % mgmt._labels["stages"].text)
@@ -821,6 +827,13 @@ func _test_m5_menu(db: BalanceDatabase) -> void:
 	menu.action_resume()
 	_check("menu: resume closes the menu", not menu.is_open())
 	_check("menu: resume resumes the run", gs.running)
+	# regression guard: every button must have its `pressed` signal wired
+	# (the "menu does nothing" bug was unwired buttons)
+	var wired: bool = true
+	for k in menu._buttons:
+		if (menu._buttons[k] as Button).get_signal_connection_list("pressed").is_empty():
+			wired = false
+	_check("menu: all buttons have wired pressed signals", wired)
 	# options cycles speed
 	var s0: int = gs.speed
 	menu.action_options()
@@ -847,6 +860,12 @@ func _test_m5_title(db: BalanceDatabase) -> void:
 	# via the lazy build + guards, and adding it would spawn a real factory)
 	var title: CanvasLayer = load("res://src/game/title_screen.gd").new()
 	title._ensure_built()
+	# regression guard: every button must have its `pressed` signal wired
+	var wired: bool = true
+	for k in title._buttons:
+		if (title._buttons[k] as Button).get_signal_connection_list("pressed").is_empty():
+			wired = false
+	_check("title: all buttons have wired pressed signals", wired)
 	# title screen is visible at start
 	_check("title: visible at start", title.is_shown())
 	# difficulty defaults to Normal

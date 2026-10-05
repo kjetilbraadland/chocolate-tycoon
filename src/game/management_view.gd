@@ -67,14 +67,14 @@ func _build_sections() -> void:
 	y = _header(y, "FARMING")
 	_labels["farm_plots"] = _label(y, DIM, 12); y += 20
 	_labels["farm_effects"] = _label(y, ACCENT, 12); y += 20
-	_buttons["farm_sugar"] = _button(y, "Place sugar plot"); y += 30
-	_buttons["farm_cocoa"] = _button(y, "Place cocoa plot"); y += 36
+	_buttons["farm_sugar"] = _button(y, "Place sugar plot"); _buttons["farm_sugar"].pressed.connect(_on_farm_sugar); y += 30
+	_buttons["farm_cocoa"] = _button(y, "Place cocoa plot"); _buttons["farm_cocoa"].pressed.connect(_on_farm_cocoa); y += 36
 	# --- R&D ---
 	y = _header(y, "R&D")
 	_labels["rnd_state"] = _label(y, DIM, 12); y += 20
 	_labels["rnd_odds"] = _label(y, ACCENT, 12); y += 20
 	_labels["rnd_last"] = _label(y, WARN, 12); y += 30
-	_buttons["rnd_start"] = _button(y, "Start R&D project")
+	_buttons["rnd_start"] = _button(y, "Start R&D project"); _buttons["rnd_start"].pressed.connect(action_start_rnd)
 
 func _header(y: float, text: String) -> float:
 	var l := Label.new()
@@ -174,6 +174,13 @@ func action_place_farm(crop: FarmingSystem.Crop) -> int:
 	if cam == null:
 		return -1
 	return cam.place_farm_plot(crop)
+
+# Button handlers (the `pressed` signal carries no args, so wrap the crop).
+func _on_farm_sugar() -> void:
+	action_place_farm(FarmingSystem.Crop.SUGAR)
+
+func _on_farm_cocoa() -> void:
+	action_place_farm(FarmingSystem.Crop.COCOA)
 
 func action_start_rnd() -> bool:
 	var cam: Campaign = GameState.campaign
