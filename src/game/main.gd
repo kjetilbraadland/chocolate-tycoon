@@ -5,6 +5,7 @@ extends Node
 
 var _hud: CanvasLayer = null
 var _mgmt: CanvasLayer = null
+var _menu: CanvasLayer = null
 
 func _ready() -> void:
 	if BalanceDB.is_ready():
@@ -30,3 +31,7 @@ func _ready() -> void:
 	var mgmt: CanvasLayer = load("res://src/game/management_view.gd").new()
 	add_child(mgmt)
 	_mgmt = mgmt
+	# add the M5 ESC pause menu (resume / save / load / options / keys / exit)
+	var menu: CanvasLayer = load("res://src/game/pause_menu.gd").new()
+	add_child(menu)
+	_menu = menu

@@ -663,6 +663,12 @@ func _test_m5(db: BalanceDatabase) -> void:
 	# --- M5 management panel: build headlessly, assert text + drive actions ---
 	_test_m5_mgmt(db)
 
+	# --- M5 procedural machine visuals ---
+	_test_m5_visual()
+
+	# --- M5 ESC pause menu ---
+	_test_m5_menu(db)
+
 func _test_m5_hud(db: BalanceDatabase) -> void:
 	print("\n[TEST] M5 HUD: build + update + rendered text")
 	# the GameState autoload (the HUD reads GameState.campaign)
@@ -759,3 +765,69 @@ func _test_m5_mgmt(db: BalanceDatabase) -> void:
 	_check("mgmt: toggle_panel flips state", mgmt._panel_open != was_open)
 	mgmt.toggle_panel()
 	root.remove_child(mgmt)
+
+func _test_m5_visual() -> void:
+	print("\n[TEST] M5 procedural machine visuals")
+	var center := Vector2(100, 100)
+	# every machine type produces a base + at least one detail polygon
+	var types: Array = ["roasting", "grinding", "mixing", "conching",
+		"tempering", "molding", "wrapping", "unknown_type"]
+	for t in types:
+		var parts: Array = MachineVisual.build(t, center)
+		_check("visual: %s has >= 2 parts" % t, parts.size() >= 2,
+			"got %d" % parts.size())
+		_check("visual: %s base is first" % t, parts.size() >= 1)
+	# the base polygon is the same footprint for all types (the block)
+	var a: Array = MachineVisual.build("roasting", center)
+	var b: Array = MachineVisual.build("molding", center)
+	_check("visual: base polygon shared across types",
+		a[0].polygon == b[0].polygon)
+	# a known type has a distinct detail (not just the base)
+	var roasting: Array = MachineVisual.build("roasting", center)
+	_check("visual: roasting has type-specific details", roasting.size() >= 3,
+		"got %d" % roasting.size())
+	# all polygons are non-empty
+	var all_ok: bool = true
+	for t in types:
+		for p in MachineVisual.build(t, center):
+			if (p.polygon as PackedVector2Array).size() < 3:
+				all_ok = false
+	_check("visual: all polygons have >= 3 points", all_ok)
+
+func _test_m5_menu(db: BalanceDatabase) -> void:
+	print("\n[TEST] M5 ESC pause menu")
+	var gs: Node = root.get_node("GameState")
+	if gs == null:
+		_check("GameState autoload present", false, "root.get_node('GameState') == null")
+		return
+	var camp := Campaign.new(db, EconomyData.Difficulty.NORMAL, 7,
+		"RCP_MILK_BAR_01", "CHAIN_A", "")
+	camp.run(1)
+	gs.campaign = camp
+	gs.running = true  # start running so the menu can pause it
+	var menu: CanvasLayer = load("res://src/game/pause_menu.gd").new()
+	root.add_child(menu)
+	# initially closed
+	_check("menu: starts closed", not menu.is_open())
+	# open it -> pauses the run
+	menu.open()
+	_check("menu: open() sets is_open", menu.is_open())
+	_check("menu: open() pauses the run", not gs.running)
+	_check("menu: panel visible when open", menu._panel.visible)
+	# resume -> resumes the run
+	menu.action_resume()
+	_check("menu: resume closes the menu", not menu.is_open())
+	_check("menu: resume resumes the run", gs.running)
+	# options cycles speed
+	var s0: int = gs.speed
+	menu.action_options()
+	_check("menu: options changes speed", gs.speed != s0, "was %d now %d" % [s0, gs.speed])
+	# keybindings action sets a status text
+	menu.action_keys()
+	_check("menu: keybindings shows the map",
+		menu._status.text.contains("SPACE"), "got: %s" % menu._status.text)
+	# save action (writes to slot1)
+	menu.action_save()
+	_check("menu: save reports saved", menu._status.text.contains("saved"),
+		"got: %s" % menu._status.text)
+	root.remove_child(menu)

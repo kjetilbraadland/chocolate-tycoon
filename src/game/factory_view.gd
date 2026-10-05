@@ -124,7 +124,17 @@ func _build_machines() -> void:
 		add_child(tile)
 		add_child(block)
 		add_child(label)
-		_machine_nodes[mid] = { "block": block, "label": label, "tile": tile }
+		# M5: procedural machine visual (type-specific details on top of the base)
+		var details: Array = []
+		var vis: Array = MachineVisual.build(md.stage, _iso(0, 0))
+		for v in vis:
+			if v.polygon == vis[0].polygon:
+				continue  # the base is the block itself
+			var p := Polygon2D.new()
+			p.color = v.color
+			add_child(p)
+			details.append(p)
+		_machine_nodes[mid] = { "block": block, "label": label, "tile": tile, "details": details }
 		_place_machine(mid)
 
 func _place_machine(mid: String) -> void:
@@ -133,6 +143,16 @@ func _place_machine(mid: String) -> void:
 	(node.tile as Polygon2D).polygon = _tile_polygon(pos)
 	(node.block as Polygon2D).polygon = _machine_block_polygon(pos)
 	(node.label as Label).position = pos + Vector2(-60, 12)
+	# reposition the type-specific detail polygons onto this tile
+	var vis: Array = MachineVisual.build(_machine_stage(mid), pos)
+	var details: Array = node.details
+	var di: int = 0
+	for v in vis:
+		if v.polygon == vis[0].polygon:
+			continue
+		if di < details.size():
+			(details[di] as Polygon2D).polygon = v.polygon
+		di += 1
 
 func _build_ghost() -> void:
 	_ghost = Polygon2D.new()
@@ -323,3 +343,10 @@ func _chain_index(mid: String) -> int:
 		return -1
 	var chain: Array = BalanceDB.db.lookup.chain_machine_ids(cam.chain_id)
 	return chain.find(mid)
+
+# The machine's stage type (for the procedural visual).
+func _machine_stage(mid: String) -> String:
+	var md: MachineData = BalanceDB.db.get_machine(mid)
+	if md == null:
+		return ""
+	return md.stage
