@@ -669,6 +669,9 @@ func _test_m5(db: BalanceDatabase) -> void:
 	# --- M5 ESC pause menu ---
 	_test_m5_menu(db)
 
+	# --- M5 title / start screen ---
+	_test_m5_title(db)
+
 func _test_m5_hud(db: BalanceDatabase) -> void:
 	print("\n[TEST] M5 HUD: build + update + rendered text")
 	# the GameState autoload (the HUD reads GameState.campaign)
@@ -831,3 +834,42 @@ func _test_m5_menu(db: BalanceDatabase) -> void:
 	_check("menu: save reports saved", menu._status.text.contains("saved"),
 		"got: %s" % menu._status.text)
 	root.remove_child(menu)
+
+func _test_m5_title(db: BalanceDatabase) -> void:
+	print("\n[TEST] M5 title / start screen")
+	var gs: Node = root.get_node("GameState")
+	if gs == null:
+		_check("GameState autoload present", false, "root.get_node('GameState') == null")
+		return
+	# clear any prior campaign so the title screen starts fresh
+	gs.campaign = null
+	# build the title headlessly (NOT added to the tree — its methods work
+	# via the lazy build + guards, and adding it would spawn a real factory)
+	var title: CanvasLayer = load("res://src/game/title_screen.gd").new()
+	title._ensure_built()
+	# title screen is visible at start
+	_check("title: visible at start", title.is_shown())
+	# difficulty defaults to Normal
+	_check("title: defaults to Normal",
+		title._difficulty == EconomyData.Difficulty.NORMAL)
+	# cycle difficulty
+	title.action_cycle_difficulty()
+	_check("title: cycle difficulty -> Hard",
+		title._difficulty == EconomyData.Difficulty.HARD)
+	title.action_cycle_difficulty()
+	_check("title: cycle difficulty -> Normal",
+		title._difficulty == EconomyData.Difficulty.NORMAL)
+	# options cycles speed
+	var s0: int = gs.speed
+	title.action_options()
+	_check("title: options changes speed", gs.speed != s0,
+		"was %d now %d" % [s0, gs.speed])
+	# keybindings shows the map
+	title.action_keys()
+	_check("title: keybindings shows the map",
+		title._status.text.contains("SPACE"), "got: %s" % title._status.text)
+	# hide_screen flips the visible state (the full new-game flow — creating a
+	# run + adding the factory view — is an integration concern needing the real
+	# tree + BalanceDB autoload, so it's verified in-game, not headlessly)
+	title.hide_screen()
+	_check("title: hide_screen hides the title screen", not title.is_shown())
