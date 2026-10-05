@@ -29,6 +29,7 @@ const BRANCH_NAMES := ["Machinery", "Recipes", "Farming", "Logistics", "Branding
 
 var _panel: Panel
 var _panel_open: bool = true
+var _box: VBoxContainer
 var _labels: Dictionary = {}
 var _buttons: Dictionary = {}
 
@@ -43,10 +44,6 @@ func _ensure_built() -> void:
 
 func _build_panel() -> void:
 	_panel = Panel.new()
-	var vp: Vector2 = Vector2(1280, 720)
-	var v: Window = get_viewport()
-	if v != null:
-		vp = v.get_visible_rect().size
 	_panel.position = Vector2(8, 64)
 	_panel.size = Vector2(360, 560)
 	var sb := StyleBoxFlat.new()
@@ -55,53 +52,52 @@ func _build_panel() -> void:
 	sb.set_content_margin_all(12)
 	_panel.add_theme_stylebox_override("panel", sb)
 	add_child(_panel)
+	_box = VBoxContainer.new()
+	_box.position = Vector2(12, 12)
+	_box.size = Vector2(336, 536)
+	_box.add_theme_constant_override("separation", 4)
+	_panel.add_child(_box)
 	_build_sections()
 
 func _build_sections() -> void:
-	var y: float = 16
 	# --- Unlock tree ---
-	y = _header(y, "UNLOCK TREE")
-	_labels["stages"] = _label(y, DIM, 12); y += 20
-	_labels["branches"] = _label(y, DIM, 12); y += 56
+	_box.add_child(_header("UNLOCK TREE"))
+	_labels["stages"] = _label(DIM, 12)
+	_labels["branches"] = _label(DIM, 12)
 	# --- Farming ---
-	y = _header(y, "FARMING")
-	_labels["farm_plots"] = _label(y, DIM, 12); y += 20
-	_labels["farm_effects"] = _label(y, ACCENT, 12); y += 20
-	_buttons["farm_sugar"] = _button(y, "Place sugar plot"); _buttons["farm_sugar"].pressed.connect(_on_farm_sugar); y += 30
-	_buttons["farm_cocoa"] = _button(y, "Place cocoa plot"); _buttons["farm_cocoa"].pressed.connect(_on_farm_cocoa); y += 36
+	_box.add_child(_header("FARMING"))
+	_labels["farm_plots"] = _label(DIM, 12)
+	_labels["farm_effects"] = _label(ACCENT, 12)
+	_buttons["farm_sugar"] = _button("Place sugar plot"); _buttons["farm_sugar"].pressed.connect(_on_farm_sugar)
+	_buttons["farm_cocoa"] = _button("Place cocoa plot"); _buttons["farm_cocoa"].pressed.connect(_on_farm_cocoa)
 	# --- R&D ---
-	y = _header(y, "R&D")
-	_labels["rnd_state"] = _label(y, DIM, 12); y += 20
-	_labels["rnd_odds"] = _label(y, ACCENT, 12); y += 20
-	_labels["rnd_last"] = _label(y, WARN, 12); y += 30
-	_buttons["rnd_start"] = _button(y, "Start R&D project"); _buttons["rnd_start"].pressed.connect(action_start_rnd)
+	_box.add_child(_header("R&D"))
+	_labels["rnd_state"] = _label(DIM, 12)
+	_labels["rnd_odds"] = _label(ACCENT, 12)
+	_labels["rnd_last"] = _label(WARN, 12)
+	_buttons["rnd_start"] = _button("Start R&D project"); _buttons["rnd_start"].pressed.connect(action_start_rnd)
 
-func _header(y: float, text: String) -> float:
+func _header(text: String) -> Label:
 	var l := Label.new()
-	l.position = Vector2(12, y)
 	l.text = text
 	l.add_theme_font_size_override("font_size", 13)
 	l.add_theme_color_override("font_color", DIM)
-	_panel.add_child(l)
-	return y + 26
+	return l
 
-func _label(y: float, color: Color, size: int) -> Label:
+func _label(color: Color, size: int) -> Label:
 	var l := Label.new()
-	l.position = Vector2(12, y)
-	l.custom_minimum_size = Vector2(336, 0)
+	l.custom_minimum_size = Vector2(0, 0)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
-	_panel.add_child(l)
+	_box.add_child(l)
 	return l
 
-func _button(y: float, text: String) -> Button:
+func _button(text: String) -> Button:
 	var b := Button.new()
-	b.position = Vector2(12, y)
-	b.size = Vector2(336, 26)
 	b.text = text
 	b.add_theme_font_size_override("font_size", 12)
-	_panel.add_child(b)
+	_box.add_child(b)
 	return b
 
 func _process(_delta: float) -> void:

@@ -308,22 +308,19 @@ func _build_ghost() -> void:
 func _build_hud() -> void:
 	_hud = CanvasLayer.new()
 	add_child(_hud)
-	var top := Label.new()
-	top.name = "TopBar"
-	top.position = Vector2(20, 16)
-	top.add_theme_font_size_override("font_size", 18)
-	top.add_theme_color_override("font_color", COL_ACCENT)
-	_hud.add_child(top)
+	# NOTE: the top status bar (Day | Cash | Debt | speed) lives in hud_view
+	# (_top_bar). It was duplicated here before, which caused the ghosted
+	# double-render. Only the build stamp + status line are here now.
 	var build := Label.new()
 	build.name = "BuildStamp"
-	build.position = Vector2(20, 44)
+	build.position = Vector2(20, 38)
 	build.add_theme_font_size_override("font_size", 12)
 	build.add_theme_color_override("font_color", COL_TEXT)
 	build.text = "Chocolate Factory Tycoon — M1 build (placement grid)"
 	_hud.add_child(build)
 	var status := Label.new()
 	status.name = "StatusLine"
-	status.position = Vector2(20, 68)
+	status.position = Vector2(20, 50)
 	status.add_theme_font_size_override("font_size", 14)
 	status.add_theme_color_override("font_color", COL_TEXT)
 	_hud.add_child(status)
@@ -496,12 +493,9 @@ func _process(_delta: float) -> void:
 		for p in particles:
 			(p as CPUParticles2D).visible = running
 	# HUD
-	var top: Label = _hud.get_node("TopBar")
 	var status: Label = _hud.get_node("StatusLine")
 	var eco: Economy = cam.sim.economy
 	var running_str: String = "RUNNING" if GameState.running else "PAUSED"
-	top.text = "Day %d  |  Cash: %.0f  |  Debt: %.0f  |  %dx" % [
-		cam.sim.day, eco.cash, eco.debt, GameState.speed]
 	var last_q: String = ""
 	var last_grade: String = ""
 	var last_sold: float = 0.0

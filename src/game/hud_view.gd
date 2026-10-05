@@ -23,6 +23,7 @@ const BAD := Color(0.95, 0.45, 0.45)
 var _top_bar: Label
 var _panel: Panel
 var _panel_open: bool = true
+var _box: VBoxContainer
 var _labels: Dictionary = {}  # key -> Label
 var _bars: Dictionary = {}  # quality component key -> ProgressBar
 
@@ -63,64 +64,60 @@ func _build_panel() -> void:
 	sb.set_content_margin_all(12)
 	_panel.add_theme_stylebox_override("panel", sb)
 	add_child(_panel)
+	_box = VBoxContainer.new()
+	_box.position = Vector2(12, 12)
+	_box.size = Vector2(336, 536)
+	_box.add_theme_constant_override("separation", 4)
+	_panel.add_child(_box)
 	_build_sections()
 
 func _build_sections() -> void:
-	var y: float = 16
 	# --- B: Bottleneck section ---
-	y = _section_header(y, "BOTTLENECK")
-	_labels["b_summary"] = _add_label(y, ACCENT, 14)
-	y += 24
-	_labels["b_bottleneck"] = _add_label(y, WARN, 13)
-	y += 22
-	_labels["b_machines"] = _add_label(y, DIM, 12)
-	y += 60
+	_box.add_child(_section_header("BOTTLENECK"))
+	_labels["b_summary"] = _add_label(ACCENT, 14)
+	_labels["b_bottleneck"] = _add_label(WARN, 13)
+	_labels["b_machines"] = _add_label(DIM, 12)
 	# --- Q: Quality section ---
-	y = _section_header(y, "QUALITY")
-	_labels["q_summary"] = _add_label(y, ACCENT, 14)
-	y += 24
-	# quality component bars (T/P/C/F/S/W)
+	_box.add_child(_section_header("QUALITY"))
+	_labels["q_summary"] = _add_label(ACCENT, 14)
+	# quality component bars (T/P/C/F/S/W) — each a label + bar row
 	for k in ["T", "P", "C", "F", "S", "W"]:
-		_bars[k] = _add_bar(y, k)
-		y += 26
-	y += 4
-	_labels["q_grade"] = _add_label(y, TEXT, 14)
-	y += 30
+		_bars[k] = _add_bar(k)
+	_labels["q_grade"] = _add_label(TEXT, 14)
 	# --- P: Pacing section ---
-	y = _section_header(y, "PACING")
-	_labels["p_summary"] = _add_label(y, ACCENT, 13)
-	y += 22
-	_labels["p_detail"] = _add_label(y, DIM, 12)
+	_box.add_child(_section_header("PACING"))
+	_labels["p_summary"] = _add_label(ACCENT, 13)
+	_labels["p_detail"] = _add_label(DIM, 12)
 
-func _section_header(y: float, text: String) -> float:
+func _section_header(text: String) -> Label:
 	var l := Label.new()
-	l.position = Vector2(12, y)
 	l.text = text
 	l.add_theme_font_size_override("font_size", 13)
 	l.add_theme_color_override("font_color", DIM)
-	_panel.add_child(l)
-	return y + 26
+	return l
 
-func _add_label(y: float, color: Color, size: int) -> Label:
+func _add_label(color: Color, size: int) -> Label:
 	var l := Label.new()
-	l.position = Vector2(12, y)
-	l.custom_minimum_size = Vector2(336, 0)
+	l.custom_minimum_size = Vector2(0, 0)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
-	_panel.add_child(l)
+	_box.add_child(l)
 	return l
 
-func _add_bar(y: float, name: String) -> ProgressBar:
+func _add_bar(name: String) -> ProgressBar:
+	# a label + progress-bar row (HBox), stacked in the main VBox
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
 	var l := Label.new()
-	l.position = Vector2(12, y)
 	l.text = name
+	l.custom_minimum_size = Vector2(20, 0)
 	l.add_theme_font_size_override("font_size", 12)
 	l.add_theme_color_override("font_color", DIM)
-	_panel.add_child(l)
+	row.add_child(l)
 	var bar := ProgressBar.new()
-	bar.position = Vector2(40, y)
-	bar.size = Vector2(300, 18)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.custom_minimum_size = Vector2(0, 18)
 	bar.max_value = 100.0
 	bar.show_percentage = false
 	var sb := StyleBoxFlat.new()
@@ -131,7 +128,8 @@ func _add_bar(y: float, name: String) -> ProgressBar:
 	fill.bg_color = ACCENT
 	fill.set_corner_radius_all(4)
 	bar.add_theme_stylebox_override("fill", fill)
-	_panel.add_child(bar)
+	row.add_child(bar)
+	_box.add_child(row)
 	return bar
 
 func _process(_delta: float) -> void:
