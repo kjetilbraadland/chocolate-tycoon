@@ -9,7 +9,7 @@ extends RefCounted
 const RAW := Color(0.85, 0.62, 0.35)      # raw material (cocoa / sugar)
 const SEMI := Color(0.62, 0.55, 0.72)     # semi-finished (tempered paste)
 const FINISHED := Color(0.55, 0.72, 0.55) # finished chocolate
-const BELT_BASE := Color(0.20, 0.20, 0.24)
+const BELT_BASE := Color(0.34, 0.35, 0.42)  # conveyor (visible on the dark floor)
 const ITEM := Color(0.95, 0.85, 0.55)
 const INSERTER := Color(0.45, 0.85, 0.95)
 

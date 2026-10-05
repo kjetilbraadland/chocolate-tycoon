@@ -279,6 +279,9 @@ func _update_belts() -> void:
 		if belt_on:
 			var belt = line.belt_network.belts[i]
 			fill = belt.held / belt.capacity if belt.capacity > 0.0 else 0.0
+			# always show at least a thin strip of material flowing, so the
+			# belt is visible even when nearly empty (Factorio-style)
+			fill = maxf(fill, 0.18)
 			col = BeltVisual.kind_color(belt.kind)
 		else:
 			# derive the kind color from the belt index (0=raw, N=finished,
