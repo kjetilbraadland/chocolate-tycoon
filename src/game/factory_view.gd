@@ -25,6 +25,10 @@ var _machine_layout: Dictionary = {}  # machine_id -> Vector2i (grid coords)
 var _ghost: Polygon2D  # placement preview
 var _drag_machine: String = ""
 var _panning: bool = false
+# M6: belt + inserter visuals (Factorio-style). A container holding one
+# Polygon2D per belt strip (raw / semi / finished) + inserter arms.
+var _belt_layer: Node2D
+var _belt_polys: Array = []  # belt_id -> Array[Polygon2D]
 
 # cozy palette
 const COL_FLOOR := Color(0.16, 0.14, 0.12)
@@ -43,6 +47,7 @@ func _ready() -> void:
 	_build_camera()
 	_build_grid()
 	_build_machines()
+	_build_belts()
 	_build_ghost()
 	_build_hud()
 	_apply_saved_layout()
@@ -154,6 +159,80 @@ func _place_machine(mid: String) -> void:
 			(details[di] as Polygon2D).polygon = v.polygon
 		di += 1
 
+# M6: build the belt + inserter visual layer. One strip per belt (raw /
+# semi / finished), positioned between the machine tiles (so they follow
+# when you drag). Fill level + color come from the live belt network.
+func _build_belts() -> void:
+	_belt_layer = Node2D.new()
+	add_child(_belt_layer)
+	var cam := GameState.campaign
+	if cam == null:
+		return
+	var chain: Array = BalanceDB.db.lookup.chain_machine_ids(cam.chain_id)
+	var n: int = chain.size()
+	# belt endpoints: source -> m0 -> m1 -> ... -> m(n-1) -> finished
+	# (positions derived from the machine layout in _update_belts)
+	for i in range(n + 1):
+		var polys: Array = []
+		var base := Polygon2D.new()
+		base.color = BeltVisual.BELT_BASE
+		_belt_layer.add_child(base)
+		polys.append(base)
+		var fill := Polygon2D.new()
+		fill.color = BeltVisual.SEMI
+		_belt_layer.add_child(fill)
+		polys.append(fill)
+		_belt_polys.append(polys)
+	# inserter arms (one per machine, at the input junction)
+	for i in range(n):
+		var arm := Polygon2D.new()
+		arm.color = BeltVisual.INSERTER
+		_belt_layer.add_child(arm)
+		_belt_polys[i].append(arm)
+
+# M6: update belt strip positions + fill from the live belt network.
+# The belt path is always visible (so the player sees the flow); when
+# belt-mode is off it is muted (no fill), when on it shows the live fill
+# + kind color (the belts are then real constraints).
+func _update_belts() -> void:
+	var cam := GameState.campaign
+	if cam == null or _belt_layer == null:
+		return
+	var line: ProductionLine = cam.sim.line
+	var belt_on: bool = line.belt_enabled and line.belt_network != null
+	_belt_layer.visible = true
+	var cam2 := GameState.campaign
+	var chain: Array = BalanceDB.db.lookup.chain_machine_ids(cam2.chain_id)
+	var n: int = chain.size() + 1  # N machines -> N+1 belts
+	var pts: Array = []
+	# source point: offset left of machine 0
+	var m0: Vector2 = _iso(_machine_layout[chain[0]].x, _machine_layout[chain[0]].y)
+	pts.append(m0 + Vector2(-48, -8))
+	for i in range(n - 1):
+		pts.append(_iso(_machine_layout[chain[i]].x, _machine_layout[chain[i]].y) + Vector2(0, -8))
+	# finished point: offset right of the last machine
+	var last: Vector2 = _iso(_machine_layout[chain[n - 2]].x, _machine_layout[chain[n - 2]].y)
+	pts.append(last + Vector2(48, -8))
+	for i in range(n):
+		var a: Vector2 = pts[i]
+		var b: Vector2 = pts[i + 1]
+		var polys: Array = _belt_polys[i]
+		(polys[0] as Polygon2D).polygon = BeltVisual._strip(a, b, 10.0)
+		(polys[0] as Polygon2D).color = BeltVisual.BELT_BASE
+		# fill + color: live when belt-mode is on, muted when off
+		var fill: float = 0.0
+		var col: Color = BeltVisual.SEMI
+		if belt_on:
+			var belt = line.belt_network.belts[i]
+			fill = belt.held / belt.capacity if belt.capacity > 0.0 else 0.0
+			col = BeltVisual.kind_color(belt.kind)
+		(polys[1] as Polygon2D).polygon = BeltVisual._strip(a.lerp(b, 1.0 - fill), b, 6.0)
+		(polys[1] as Polygon2D).color = col if fill > 0.0 else BeltVisual.BELT_BASE
+		(polys[1] as Polygon2D).visible = fill > 0.0
+		# inserter arm at the machine input junction (the belt's far end)
+		if polys.size() > 2:
+			(polys[2] as Polygon2D).polygon = BeltVisual.inserter(b)[0].polygon
+
 func _build_ghost() -> void:
 	_ghost = Polygon2D.new()
 	_ghost.color = COL_GHOST_OK
@@ -186,7 +265,7 @@ func _build_hud() -> void:
 	hint.position = Vector2(20, 872)
 	hint.add_theme_font_size_override("font_size", 13)
 	hint.add_theme_color_override("font_color", COL_TEXT)
-	hint.text = "drag machine: move   drag ground: pan   wheel: zoom   SPACE: pause   1/2/3: speed   R: reset   S: save   L: load"
+	hint.text = "drag machine: move   drag ground: pan   wheel: zoom   SPACE: pause   1/2/3: speed   R: reset   S: save   L: load   K: belts"
 	_hud.add_child(hint)
 
 func _apply_saved_layout() -> void:
@@ -260,6 +339,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				if not data.is_empty():
 					GameState.load_game(data)
 					_apply_saved_layout()
+			KEY_K:
+				var cam := GameState.campaign
+				if cam != null:
+					cam.set_belts(not cam.belt_mode)
 	elif event is InputEventMouseButton:
 		var mb: InputEventMouseButton = event
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -336,6 +419,8 @@ func _process(_delta: float) -> void:
 		running_str, cam.sim.total_units_produced,
 		last_sold, last_q, last_grade,
 		"BANKRUPT" if eco.is_bankrupt else "OK"]
+	# M6: update belt + inserter visuals
+	_update_belts()
 
 func _chain_index(mid: String) -> int:
 	var cam := GameState.campaign

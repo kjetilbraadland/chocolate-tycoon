@@ -675,6 +675,9 @@ func _test_m5(db: BalanceDatabase) -> void:
 	# --- M6 Factorio-style belt + inserter routing ---
 	_test_m6_belts(db)
 
+	# --- M6 belt + inserter visuals ---
+	_test_m6_belt_visual()
+
 func _test_m5_hud(db: BalanceDatabase) -> void:
 	print("\n[TEST] M5 HUD: build + update + rendered text")
 	# the GameState autoload (the HUD reads GameState.campaign)
@@ -957,3 +960,39 @@ func _test_m6_belts(db: BalanceDatabase) -> void:
 	var bb: Dictionary = bn2.bottleneck_belt()
 	_check("belts: bottleneck_belt returns a belt id >= 0",
 		int(bb.belt_id) >= 0, "got %s" % str(bb.belt_id))
+
+func _test_m6_belt_visual() -> void:
+	print("\n[TEST] M6 belt + inserter visuals")
+	var a := Vector2(0, 0)
+	var b := Vector2(100, 0)
+	# belt() returns base + fill (2 polygons), fill scaled by the level
+	var parts: Array = BeltVisual.belt(a, b, 0.5)
+	_check("belt visual: belt() returns base + fill", parts.size() == 2,
+		"got %d" % parts.size())
+	# zero fill -> only the base (no fill overlay)
+	var empty: Array = BeltVisual.belt(a, b, 0.0)
+	_check("belt visual: zero fill -> base only", empty.size() == 1,
+		"got %d" % empty.size())
+	# full fill -> base + fill
+	var full: Array = BeltVisual.belt(a, b, 1.0)
+	_check("belt visual: full fill -> base + fill", full.size() == 2,
+		"got %d" % full.size())
+	# inserter() returns an arm polygon
+	var arm: Array = BeltVisual.inserter(Vector2(50, 0))
+	_check("belt visual: inserter() returns an arm", arm.size() == 1,
+		"got %d" % arm.size())
+	# items() scales count with fill
+	var items0: Array = BeltVisual.items(a, b, 0.0)
+	var items1: Array = BeltVisual.items(a, b, 1.0)
+	_check("belt visual: items scale with fill",
+		items1.size() > items0.size(),
+		"items0=%d items1=%d" % [items0.size(), items1.size()])
+	# all polygons are non-empty
+	var all_ok: bool = true
+	for p in BeltVisual.belt(a, b, 0.5):
+		if (p.polygon as PackedVector2Array).size() < 3:
+			all_ok = false
+	_check("belt visual: all polygons have >= 3 points", all_ok)
+	# kind colors are distinct
+	_check("belt visual: raw/semi/finished colors differ",
+		BeltVisual.kind_color("raw") != BeltVisual.kind_color("finished"))
