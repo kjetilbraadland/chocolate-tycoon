@@ -219,13 +219,26 @@ func _update_belts() -> void:
 		var polys: Array = _belt_polys[i]
 		(polys[0] as Polygon2D).polygon = BeltVisual._strip(a, b, 10.0)
 		(polys[0] as Polygon2D).color = BeltVisual.BELT_BASE
-		# fill + color: live when belt-mode is on, muted when off
-		var fill: float = 0.0
+		# fill + color: always show the material flowing (so the belts are
+		# visible, Factorio-style). When belt-mode is on, the fill level is
+		# the real belt held/capacity (the constraint); when off, show a
+		# full flow in the kind color (a visual representation, the sim
+		# still uses the legacy direct flow so the baseline is preserved).
+		var fill: float = 1.0
 		var col: Color = BeltVisual.SEMI
 		if belt_on:
 			var belt = line.belt_network.belts[i]
 			fill = belt.held / belt.capacity if belt.capacity > 0.0 else 0.0
 			col = BeltVisual.kind_color(belt.kind)
+		else:
+			# derive the kind color from the belt index (0=raw, N=finished,
+			# rest=semi) so the visual shows the material type flowing
+			var kind: String = "semi"
+			if i == 0:
+				kind = "raw"
+			elif i == n - 1:
+				kind = "finished"
+			col = BeltVisual.kind_color(kind)
 		(polys[1] as Polygon2D).polygon = BeltVisual._strip(a.lerp(b, 1.0 - fill), b, 6.0)
 		(polys[1] as Polygon2D).color = col if fill > 0.0 else BeltVisual.BELT_BASE
 		(polys[1] as Polygon2D).visible = fill > 0.0

@@ -60,8 +60,10 @@ var progression: Progression
 var farming: FarmingSystem
 # M6: Factorio-style belt + inserter routing. belt_mode = true routes flow
 # through the belt network (belt capacity + inserter rate become real
-# constraints). Default false = legacy direct buffer flow (regression baseline).
-var belt_mode: bool = false
+# constraints). Default true = belts are visible + real from the start
+# (Factorio-style). The fast default belt (20/tick) keeps up with the line,
+# so production matches the legacy flow and the regression baseline holds.
+var belt_mode: bool = true
 var belt_capacity: float = 150.0
 var belt_throughput: float = 20.0
 var inserter_rate: float = 20.0
@@ -86,6 +88,11 @@ func _init(db: BalanceDatabase, d: EconomyData.Difficulty, s: int,
 	rnd = RnD.new(rng)
 	progression = Progression.new()
 	farming = FarmingSystem.new(rng)
+	# M6: belts are on by default (Factorio-style — visible + real from the
+	# start). The fast default belt keeps up with the line, so production
+	# matches the legacy flow and the regression baseline holds.
+	if belt_mode:
+		set_belts(true)
 
 # M2: is this recipe unlocked at the current player tier?
 func is_recipe_unlocked(r_id: String) -> bool:
